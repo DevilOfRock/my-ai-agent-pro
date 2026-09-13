@@ -1,0 +1,327 @@
+import os
+import streamlit as st
+from dotenv import load_dotenv
+from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_community.tools import DuckDuckGoSearchRun
+from langchain_core.tools import tool
+
+load_dotenv()
+api_key = os.getenv("GOOGLE_API_KEY")
+
+st.set_page_config(page_title="AI Agent Pro", page_icon="✨", layout="wide")
+
+# --- 1. ระบบจัดการ State ---
+if "theme" not in st.session_state:
+    st.session_state.theme = "Light"
+
+if "language" not in st.session_state:
+    st.session_state.language = "ไทย"
+
+if "logged_in" not in st.session_state:
+    st.session_state.logged_in = False
+
+if "chat_history" not in st.session_state:
+    st.session_state.chat_history = []
+
+# --- 2. ข้อความสลับภาษา ---
+i18n = {
+    "ไทย": {
+        "login_title": "✨ เข้าสู่ระบบ AI Agent Pro",
+        "greeting": "Hi AI Agent Pro, let's get into it",
+        "new_chat": "➕ เริ่มแชทใหม่",
+        "settings": "⚙️ การตั้งค่า",
+        "theme_label": "โทนสี (Theme)",
+        "lang_label": "ภาษา (Language)",
+        "logout": "🚪 ออกจากระบบ",
+        "input_placeholder": "Ask AI Agent Pro...",
+        "sys_prompt": "คุณคือ AI Agent Pro ผู้ช่วยอัจฉริยะ ตอบคำถามเป็นภาษาไทยอย่างสุภาพและเป็นกันเอง"
+    },
+    "English": {
+        "login_title": "✨ AI Agent Pro Login",
+        "greeting": "Hi AI Agent Pro, let's get into it",
+        "new_chat": "➕ New Chat",
+        "settings": "⚙️ Settings",
+        "theme_label": "Theme",
+        "lang_label": "Language",
+        "logout": "🚪 Log Out",
+        "input_placeholder": "Ask AI Agent Pro...",
+        "sys_prompt": "You are AI Agent Pro, a smart assistant. Respond in English politely and naturally."
+    },
+    "中文": {
+        "login_title": "✨ 登录 AI Agent Pro",
+        "greeting": "Hi AI Agent Pro, let's get into it",
+        "new_chat": "➕ 新建对话",
+        "settings": "⚙️ 设置",
+        "theme_label": "主题模式 (Theme)",
+        "lang_label": "语言 (Language)",
+        "logout": "🚪 退出登录",
+        "input_placeholder": "Ask AI Agent Pro...",
+        "sys_prompt": "你是 AI Agent Pro 智能助手。请使用中文礼貌自然地回答问题。"
+    }
+}
+
+txt = i18n[st.session_state.language]
+
+# --- 3. Dynamic CSS ---
+if st.session_state.theme == "Light":
+    app_bg = "radial-gradient(circle at top, #E8F0FE 0%, #F8FAFD 60%, #FFFFFF 100%)"
+    text_color = "#1F2937"
+    sidebar_bg = "#F0F4F9"
+    input_bg = "#FFFFFF"
+    input_text = "#111827"
+    user_bg = "#E3E3E3"
+    ai_bg = "#FFFFFF"
+    border_color = "#C0C4CC"
+    button_bg = "#1A73E8"
+    button_text = "#FFFFFF"
+else: 
+    app_bg = "radial-gradient(circle at top, #0D1527 0%, #080C14 60%, #05070A 100%)"
+    text_color = "#E3E3E3"
+    sidebar_bg = "#13151A"
+    input_bg = "#1E1F20"
+    input_text = "#E3E3E3"
+    user_bg = "#282A2C"
+    ai_bg = "#1E1F20"
+    border_color = "#3E424A"
+    button_bg = "#1B4D89"
+    button_text = "#FFFFFF"
+
+st.markdown(f"""
+    <style>
+    .stApp {{
+        background: {app_bg} !important;
+        color: {text_color} !important;
+    }}
+    header {{visibility: hidden;}}
+    
+    p, span, label, h1, h2, h3, h4, h5, h6 {{
+        color: {text_color} !important;
+    }}
+    
+    section[data-testid="stSidebar"] {{
+        background-color: {sidebar_bg} !important;
+        border-right: 1px solid {border_color} !important;
+    }}
+    
+    /* ซ่อนขอบกรอบของ st.form เพื่อความสวยงาม */
+    [data-testid="stForm"] {{
+        border: none !important;
+        padding: 0 !important;
+    }}
+    
+    .stButton>button {{
+        background-color: {button_bg} !important;
+        color: {button_text} !important;
+        border-radius: 25px !important;
+        border: none !important;
+        font-weight: 500 !important;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }}
+    
+    div[data-baseweb="input"],
+    div[data-baseweb="base-input"],
+    div[data-baseweb="select"],
+    div[data-baseweb="select"] > div,
+    .stTextInput > div > div {{
+        background-color: {input_bg} !important;
+        color: {input_text} !important;
+        border: 1px solid {border_color} !important;
+        border-radius: 12px !important;
+    }}
+    
+    .stTextInput input {{
+        background-color: transparent !important;
+        color: {input_text} !important;
+        -webkit-text-fill-color: {input_text} !important;
+    }}
+
+    div[data-baseweb="input"] svg,
+    div[data-baseweb="select"] svg {{
+        fill: {input_text} !important;
+    }}
+
+    div[data-testid="stChatInput"],
+    div[data-testid="stChatInput"] textarea {{
+        background-color: {input_bg} !important;
+        color: {input_text} !important;
+    }}
+    div[data-testid="stChatInput"] {{
+        border: 1px solid {border_color} !important;
+        border-radius: 28px !important;
+    }}
+
+    .greeting-title {{
+        font-size: 2.8rem;
+        font-weight: 400;
+        color: {text_color};
+        text-align: center;
+        margin-top: 6rem;
+        margin-bottom: 2rem;
+        font-family: 'Google Sans', sans-serif, Segoe UI;
+    }}
+    
+    [data-testid="stChatMessage"]:has([data-testid="chatAvatarIcon-user"]) {{
+        flex-direction: row-reverse;
+        text-align: right;
+        background-color: {user_bg} !important;
+        border-radius: 20px 20px 4px 20px;
+        margin-left: auto;
+        max-width: 75%;
+    }}
+    
+    [data-testid="stChatMessage"]:has([data-testid="chatAvatarIcon-assistant"]) {{
+        background-color: {ai_bg} !important;
+        border: 1px solid {border_color};
+        border-radius: 20px 20px 20px 4px;
+        margin-right: auto;
+        max-width: 80%;
+    }}
+    </style>
+""", unsafe_allow_html=True)
+
+# --- 4. ระบบ LOGIN (ใช้ st.form เพื่อรองรับการกด Enter) ---
+if not st.session_state.logged_in:
+    st.markdown(f"<h2 style='text-align: center; margin-top: 3rem;'>{txt['login_title']}</h2>", unsafe_allow_html=True)
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        # ใช้ st.form ครอบเพื่อให้กด Enter submit ได้ทันที
+        with st.form("login_form", clear_on_submit=False):
+            username = st.text_input("Username")
+            password = st.text_input("Password", type="password")
+            st.write("")
+            login_submitted = st.form_submit_button("Log In", use_container_width=True)
+            
+            if login_submitted:
+                if username == "admin" and password == "1234":
+                    st.session_state.logged_in = True
+                    st.rerun()
+                else:
+                    st.error("Username หรือ Password ไม่ถูกต้อง")
+        
+        st.write("---")
+        sel_lang = st.selectbox(
+            txt["lang_label"],
+            ["ไทย", "English", "中文"],
+            index=["ไทย", "English", "中文"].index(st.session_state.language)
+        )
+        if sel_lang != st.session_state.language:
+            st.session_state.language = sel_lang
+            st.rerun()
+
+        sel_theme = st.radio(
+            txt["theme_label"],
+            ["Light", "Dark"],
+            horizontal=True,
+            index=0 if st.session_state.theme == "Light" else 1
+        )
+        if sel_theme != st.session_state.theme:
+            st.session_state.theme = sel_theme
+            st.rerun()
+            
+    st.stop()
+
+# --- 5. SIDEBAR ---
+with st.sidebar:
+    st.subheader("✨ AI Agent Pro")
+    if st.button(txt["new_chat"], use_container_width=True):
+        st.session_state.chat_history = []
+        st.rerun()
+    
+    st.divider()
+    st.caption(txt["settings"])
+    
+    selected_lang = st.selectbox(
+        txt["lang_label"],
+        ["ไทย", "English", "中文"],
+        key="sb_lang",
+        index=["ไทย", "English", "中文"].index(st.session_state.language)
+    )
+    if selected_lang != st.session_state.language:
+        st.session_state.language = selected_lang
+        st.rerun()
+        
+    selected_theme = st.radio(
+        txt["theme_label"],
+        ["Light", "Dark"],
+        key="sb_theme",
+        horizontal=True,
+        index=0 if st.session_state.theme == "Light" else 1
+    )
+    if selected_theme != st.session_state.theme:
+        st.session_state.theme = selected_theme
+        st.rerun()
+
+    st.divider()
+    st.caption("Account: **admin**")
+    if st.button(txt["logout"], use_container_width=True):
+        st.session_state.logged_in = False
+        st.rerun()
+
+# --- 6. TOOLS & AI LOGIC ---
+search_tool = DuckDuckGoSearchRun()
+
+@tool
+def calculate_vat(price: float) -> str:
+    """คำนวณราคาสินค้ารวมภาษี VAT 7%"""
+    total = price * 1.07
+    return f"ราคารวม VAT 7% คือ {total:.2f} บาท"
+
+tools = [search_tool, calculate_vat]
+
+def extract_text(response_content):
+    if isinstance(response_content, str):
+        return response_content
+    if isinstance(response_content, list) and len(response_content) > 0:
+        if isinstance(response_content[0], dict) and "text" in response_content[0]:
+            return response_content[0]["text"]
+    if hasattr(response_content, "text"):
+        return response_content.text
+    return str(response_content)
+
+if not st.session_state.chat_history:
+    st.markdown(f"<div class='greeting-title'>{txt['greeting']}</div>", unsafe_allow_html=True)
+
+for message in st.session_state.chat_history:
+    with st.chat_message(message["role"]):
+        st.markdown(message["content"])
+
+if user_input := st.chat_input(txt["input_placeholder"]):
+    st.session_state.chat_history.append({"role": "user", "content": user_input})
+    with st.chat_message("user"):
+        st.markdown(user_input)
+
+    with st.chat_message("assistant"):
+        with st.spinner("Processing..."):
+            try:
+                llm = ChatGoogleGenerativeAI(
+                    model="gemini-3.6-flash",
+                    google_api_key=api_key
+                )
+                llm_with_tools = llm.bind_tools(tools)
+                
+                messages_payload = [("system", txt["sys_prompt"])]
+                for msg in st.session_state.chat_history:
+                    messages_payload.append((msg["role"], msg["content"]))
+                
+                response = llm_with_tools.invoke(messages_payload)
+                
+                if response.tool_calls:
+                    tool_call = response.tool_calls[0]
+                    tool_name = tool_call["name"]
+                    
+                    if tool_name == "duckduckgo_search":
+                        query = tool_call["args"].get("query", user_input)
+                        search_result = search_tool.invoke(query)
+                        summary_response = llm.invoke(f"จากข้อมูล: {search_result} จงตอบคำถาม: {user_input} เป็นภาษา {st.session_state.language}")
+                        final_text = extract_text(summary_response.content)
+                    elif tool_name == "calculate_vat":
+                        price_arg = tool_call["args"].get("price", 0)
+                        final_text = calculate_vat.invoke({"price": price_arg})
+                else:
+                    final_text = extract_text(response.content)
+
+                st.markdown(final_text)
+                st.session_state.chat_history.append({"role": "assistant", "content": final_text})
+
+            except Exception as e:
+                st.error(f"เกิดข้อผิดพลาด: {e}")
