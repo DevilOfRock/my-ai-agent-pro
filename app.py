@@ -80,26 +80,26 @@ txt = i18n[st.session_state.language]
 
 # --- 3. Dynamic CSS ---
 if st.session_state.theme == "Light":
-    # 1. โหมด Light: กลับมาใช้พื้นหลังสีฟ้าอ่อนแบบไล่สี (Gradient)
     app_bg = "radial-gradient(circle at top, #E8F0FE 0%, #F8FAFD 60%, #FFFFFF 100%)"
     text_color = "#1F2937"
     sidebar_bg = "#F0F4F9"
-    input_bg = "#FFFFFF"     # พื้นหลังช่องพิมพ์สีขาว
-    input_text = "#111827"   # ตัวหนังสือในช่องพิมพ์สีดำ
+    input_bg = "#FFFFFF"     
+    input_text = "#111827"   
     user_bg = "#D2E3FC"
     user_text = "#111827"
     ai_bg = "#FFFFFF"
+    ai_text = "#1F2937"
     border_color = "#C0C4CC"
 else: 
     app_bg = "#0E1117"
     text_color = "#FAFAFA"
     sidebar_bg = "#262730"
-    # 2. โหมด Dark: บังคับให้ช่องพิมพ์เป็นสีขาว และตัวหนังสือพิมพ์เป็นสีดำ
-    input_bg = "#FFFFFF"     # พื้นหลังช่องพิมพ์เป็นสีขาว
-    input_text = "#111827"   # ตัวหนังสือที่พิมพ์ต้องเป็นสีดำเท่านั้น จะได้อ่านชัดเจน
+    input_bg = "#FFFFFF"     
+    input_text = "#111827"   
     user_bg = "#1A73E8"
     user_text = "#FFFFFF"
     ai_bg = "#262730"
+    ai_text = "#FAFAFA"
     border_color = "#4B4C53"
 
 st.markdown(f"""
@@ -111,7 +111,8 @@ st.markdown(f"""
     }}
     header {{ visibility: hidden; }}
     
-    p, span, label, h1, h2, h3, h4, h5, h6 {{
+    /* 1. แก้ไขให้ตัวหนังสือทุกประเภท รวมถึงแท็ก List (li, ul, ol) เปลี่ยนสีตามโหมด เพื่อให้เห็นชัดใน Dark Mode */
+    p, span, label, h1, h2, h3, h4, h5, h6, li, ul, ol, a, strong, b, i, em {{
         color: {text_color} !important;
     }}
     
@@ -131,7 +132,7 @@ st.markdown(f"""
         color: #FFFFFF !important;
     }}
     
-    /* แก้ไขช่องกรอกข้อความและ Selectbox (บังคับพื้นหลังตามที่เราตั้ง) */
+    /* แก้ไขช่องกรอกข้อความและ Selectbox */
     div[data-baseweb="select"] > div, 
     div[data-baseweb="input"] > div, 
     .stTextInput div[data-baseweb="input"] {{
@@ -148,7 +149,7 @@ st.markdown(f"""
     }}
     div[data-baseweb="select"] svg {{ fill: {input_text} !important; }}
 
-    /* แก้แถบสีด้านล่างสุดของช่องพิมพ์แชทให้โปร่งใสกลืนกับพื้นหลังหลัก */
+    /* แก้แถบสีด้านล่างสุดของช่องพิมพ์แชท */
     [data-testid="stBottom"], [data-testid="stBottom"] > div {{
         background: transparent !important;
     }}
@@ -170,10 +171,14 @@ st.markdown(f"""
         font-family: 'Google Sans', sans-serif, Segoe UI;
     }}
     
-    /* --- จัดวาง Chat Bubbles (คนขวา, AI ซ้าย) --- */
+    /* ----------------------------------------------------
+       2. จัดวาง Chat Bubbles (คนพิมพ์ = ขวา, AI = ซ้าย) 
+       * ใช้ *= เพื่อค้นหาคำว่า user/assistant แบบครอบคลุมทุกเวอร์ชั่น
+       ---------------------------------------------------- */
     
-    /* ข้อความฝั่ง User (คนพิมพ์) */
-    div[data-testid="stChatMessage"]:has([data-testid="chatAvatarIcon-user"]) {{
+    /* ข้อความฝั่ง User (ชิดขวา) */
+    div[data-testid="stChatMessage"]:has([data-testid*="user"]),
+    div[data-testid="stChatMessage"]:has([data-testid*="User"]) {{
         flex-direction: row-reverse !important;
         background-color: {user_bg} !important;
         margin-left: auto !important;
@@ -183,13 +188,15 @@ st.markdown(f"""
         max-width: 80% !important;
         border: none !important;
     }}
-    /* สีข้อความของ User */
-    div[data-testid="stChatMessage"]:has([data-testid="chatAvatarIcon-user"]) div[data-testid="stMarkdownContainer"] p {{
+    /* บังคับสีข้อความของ User */
+    div[data-testid="stChatMessage"]:has([data-testid*="user"]) [data-testid="stMarkdownContainer"] *,
+    div[data-testid="stChatMessage"]:has([data-testid*="User"]) [data-testid="stMarkdownContainer"] * {{
         color: {user_text} !important;
     }}
     
-    /* ข้อความฝั่ง AI */
-    div[data-testid="stChatMessage"]:has([data-testid="chatAvatarIcon-assistant"]) {{
+    /* ข้อความฝั่ง AI (ชิดซ้าย) */
+    div[data-testid="stChatMessage"]:has([data-testid*="assistant"]),
+    div[data-testid="stChatMessage"]:has([data-testid*="Assistant"]) {{
         flex-direction: row !important;
         background-color: {ai_bg} !important;
         margin-right: auto !important;
@@ -198,6 +205,11 @@ st.markdown(f"""
         padding: 1rem 1.5rem !important;
         max-width: 80% !important;
         border: 1px solid {border_color} !important;
+    }}
+    /* บังคับสีข้อความของ AI */
+    div[data-testid="stChatMessage"]:has([data-testid*="assistant"]) [data-testid="stMarkdownContainer"] *,
+    div[data-testid="stChatMessage"]:has([data-testid*="Assistant"]) [data-testid="stMarkdownContainer"] * {{
+        color: {ai_text} !important;
     }}
     </style>
 """, unsafe_allow_html=True)
