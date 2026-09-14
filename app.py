@@ -17,7 +17,7 @@ st.set_page_config(page_title="AI Agent Pro", page_icon="✨", layout="wide")
 
 # --- 1. ระบบจัดการ State ---
 if "theme" not in st.session_state:
-    st.session_state.theme = "Dark"  # ตั้งค่าเริ่มต้นเป็น Dark Mode
+    st.session_state.theme = "Dark"  # ค่าเริ่มต้นเป็น Dark Mode
 
 if "language" not in st.session_state:
     st.session_state.language = "ไทย"
@@ -80,33 +80,29 @@ txt = i18n[st.session_state.language]
 
 # --- 3. Dynamic CSS ---
 if st.session_state.theme == "Light":
-    app_bg = "#FFFFFF"
+    app_bg = "#F4F7F9"
     text_color = "#1F2937"
-    sidebar_bg = "#F0F4F9"
+    sidebar_bg = "#EAF0F6"
     input_bg = "#FFFFFF"
     input_text = "#111827"
-    user_bg = "#E8F0FE"  # พื้นหลังแชทฝั่งคน (สีฟ้าอ่อน)
+    user_bg = "#D2E3FC"  # สีกล่องผู้ใช้ (ฟ้าอ่อน)
     user_text = "#111827"
     ai_bg = "#FFFFFF"
-    border_color = "#C0C4CC"
-    button_bg = "#1A73E8"
-    button_text = "#FFFFFF"
+    border_color = "#D1D5DB"
 else: 
     app_bg = "#0E1117"
     text_color = "#FAFAFA"
     sidebar_bg = "#262730"
     input_bg = "#262730"
     input_text = "#FAFAFA"
-    user_bg = "#1A73E8"  # พื้นหลังแชทฝั่งคน (สีน้ำเงิน)
+    user_bg = "#1A73E8"  # สีกล่องผู้ใช้ (น้ำเงินเข้ม)
     user_text = "#FFFFFF"
     ai_bg = "#262730"
     border_color = "#4B4C53"
-    button_bg = "#1A73E8"
-    button_text = "#FFFFFF"
 
 st.markdown(f"""
     <style>
-    /* ตั้งค่าพื้นหลังแอปทั้งหมด */
+    /* พื้นหลังและตัวหนังสือหลัก */
     .stApp, .stApp > header {{
         background-color: {app_bg} !important;
         color: {text_color} !important;
@@ -117,54 +113,39 @@ st.markdown(f"""
         color: {text_color} !important;
     }}
     
-    /* ตั้งค่า Sidebar */
     section[data-testid="stSidebar"] {{
         background-color: {sidebar_bg} !important;
         border-right: 1px solid {border_color} !important;
     }}
     
-    /* ซ่อนขอบกรอบของ st.form */
-    [data-testid="stForm"] {{
+    /* แก้ไขปุ่มทั้งหมด (ปุ่ม Login และปุ่มเริ่มแชทใหม่) */
+    [data-testid="stFormSubmitButton"] > button, .stButton > button {{
+        background-color: #1A73E8 !important;
+        color: #FFFFFF !important;
+        border-radius: 8px !important;
         border: none !important;
-        padding: 0 !important;
-        background-color: transparent !important;
+    }}
+    [data-testid="stFormSubmitButton"] p, .stButton p {{
+        color: #FFFFFF !important;
     }}
     
-    /* ปรับแต่งปุ่ม Button */
-    .stButton > button {{
-        background-color: {button_bg} !important;
-        color: {button_text} !important;
-        border-radius: 8px !important;
-        border: 1px solid {border_color} !important;
-        font-weight: 500 !important;
-        padding: 0.5rem 1rem !important;
-    }}
-    .stButton > button:hover {{
-        opacity: 0.8;
-    }}
-    
-    /* ปรับแต่งช่องกรอกข้อมูล (Text Input, Password, Selectbox) */
-    div[data-baseweb="input"] > div,
-    div[data-baseweb="select"] > div,
-    .stTextInput > div > div {{
+    /* แก้ไขช่องกรอกข้อความและ Selectbox ให้เข้ากับ Dark Mode */
+    div[data-baseweb="select"] > div, 
+    div[data-baseweb="input"] > div, 
+    .stTextInput div[data-baseweb="input"] {{
         background-color: {input_bg} !important;
-        color: {input_text} !important;
         border: 1px solid {border_color} !important;
-        border-radius: 8px !important;
     }}
     
-    /* ปรับสีตัวอักษรในช่องกรอกข้อมูล */
-    input, select, textarea, div[data-baseweb="select"] * {{
+    /* สีข้อความในช่องกรอก */
+    div[data-baseweb="select"] span, div[data-baseweb="input"] input {{
         color: {input_text} !important;
         -webkit-text-fill-color: {input_text} !important;
     }}
-    div[data-baseweb="input"] svg, div[data-baseweb="select"] svg {{
-        fill: {input_text} !important;
-    }}
+    div[data-baseweb="select"] svg {{ fill: {input_text} !important; }}
 
-    /* ปรับพื้นหลังแชทด้านล่างสุด (แก้ปัญหาแถบขาวลอย) */
-    div[data-testid="stBottomBlock"] > div,
-    div[data-testid="stBottomBlock"] {{
+    /* แก้แถบสีขาวด้านล่างสุดของช่องพิมพ์แชท */
+    [data-testid="stBottom"], [data-testid="stBottom"] > div {{
         background-color: {app_bg} !important;
     }}
     
@@ -174,13 +155,7 @@ st.markdown(f"""
         border: 1px solid {border_color} !important;
         border-radius: 20px !important;
     }}
-    div[data-testid="stChatInput"] textarea {{
-        background-color: {input_bg} !important;
-        color: {input_text} !important;
-        -webkit-text-fill-color: {input_text} !important;
-    }}
 
-    /* Title */
     .greeting-title {{
         font-size: 2.8rem;
         font-weight: 400;
@@ -191,32 +166,34 @@ st.markdown(f"""
         font-family: 'Google Sans', sans-serif, Segoe UI;
     }}
     
-    /* --------------------------------------
-       จัดวางแชท (Chat Bubbles)
-       -------------------------------------- */
-    /* กล่องข้อความของผู้ใช้ (ชิดขวา) */
-    [data-testid="stChatMessage"]:has([data-testid="chatAvatarIcon-user"]) {{
+    /* --- จัดวาง Chat Bubbles (คนขวา, AI ซ้าย) --- */
+    
+    /* ข้อความฝั่ง User (คนพิมพ์) */
+    div[data-testid="stChatMessage"]:has([data-testid="chatAvatarIcon-user"]) {{
         flex-direction: row-reverse !important;
         background-color: {user_bg} !important;
-        border: 1px solid {border_color} !important;
-        border-radius: 20px 20px 4px 20px !important;
         margin-left: auto !important;
         margin-right: 0 !important;
-        max-width: 75% !important;
+        border-radius: 20px 20px 4px 20px !important;
+        padding: 1rem 1.5rem !important;
+        max-width: 80% !important;
+        border: none !important;
     }}
-    [data-testid="stChatMessage"]:has([data-testid="chatAvatarIcon-user"]) [data-testid="stMarkdownContainer"] p {{
+    /* แก้สีข้อความของ User */
+    div[data-testid="stChatMessage"]:has([data-testid="chatAvatarIcon-user"]) div[data-testid="stMarkdownContainer"] p {{
         color: {user_text} !important;
     }}
     
-    /* กล่องข้อความของ AI (ชิดซ้าย) */
-    [data-testid="stChatMessage"]:has([data-testid="chatAvatarIcon-assistant"]) {{
+    /* ข้อความฝั่ง AI */
+    div[data-testid="stChatMessage"]:has([data-testid="chatAvatarIcon-assistant"]) {{
         flex-direction: row !important;
         background-color: {ai_bg} !important;
-        border: 1px solid {border_color} !important;
-        border-radius: 20px 20px 20px 4px !important;
         margin-right: auto !important;
         margin-left: 0 !important;
+        border-radius: 20px 20px 20px 4px !important;
+        padding: 1rem 1.5rem !important;
         max-width: 80% !important;
+        border: 1px solid {border_color} !important;
     }}
     </style>
 """, unsafe_allow_html=True)
