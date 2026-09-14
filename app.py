@@ -6,14 +6,18 @@ from langchain_community.tools import DuckDuckGoSearchRun
 from langchain_core.tools import tool
 
 load_dotenv()
-# ดึง API Key จาก st.secrets บน Cloud ก่อน ถ้าไม่มีค่อยดึงจาก .env ในคอม
-api_key = st.secrets.get("GOOGLE_API_KEY") or os.getenv("GOOGLE_API_KEY")
+
+# --- ดึง API KEY ---
+try:
+    api_key = st.secrets["GOOGLE_API_KEY"]
+except Exception:
+    api_key = os.getenv("GOOGLE_API_KEY")
 
 st.set_page_config(page_title="AI Agent Pro", page_icon="✨", layout="wide")
 
 # --- 1. ระบบจัดการ State ---
 if "theme" not in st.session_state:
-    st.session_state.theme = "Light"
+    st.session_state.theme = "Dark"  # ตั้งค่าเริ่มต้นเป็น Dark Mode
 
 if "language" not in st.session_state:
     st.session_state.language = "ไทย"
@@ -26,6 +30,14 @@ if "current_user" not in st.session_state:
 
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
+
+# --- ดึง USER / PASSWORD ---
+try:
+    valid_user = st.secrets["APP_USER"]
+    valid_pass = st.secrets["APP_PASS"]
+except Exception:
+    valid_user = os.getenv("APP_USER", "parinya_nnk")
+    valid_pass = os.getenv("APP_PASS", "g@?OfEB8-q9X")
 
 # --- 2. ข้อความสลับภาษา ---
 i18n = {
@@ -68,91 +80,107 @@ txt = i18n[st.session_state.language]
 
 # --- 3. Dynamic CSS ---
 if st.session_state.theme == "Light":
-    app_bg = "radial-gradient(circle at top, #E8F0FE 0%, #F8FAFD 60%, #FFFFFF 100%)"
+    app_bg = "#FFFFFF"
     text_color = "#1F2937"
     sidebar_bg = "#F0F4F9"
     input_bg = "#FFFFFF"
     input_text = "#111827"
-    user_bg = "#E3E3E3"
+    user_bg = "#E8F0FE"  # พื้นหลังแชทฝั่งคน (สีฟ้าอ่อน)
+    user_text = "#111827"
     ai_bg = "#FFFFFF"
     border_color = "#C0C4CC"
     button_bg = "#1A73E8"
     button_text = "#FFFFFF"
 else: 
-    app_bg = "radial-gradient(circle at top, #0D1527 0%, #080C14 60%, #05070A 100%)"
-    text_color = "#E3E3E3"
-    sidebar_bg = "#13151A"
-    input_bg = "#1E1F20"
-    input_text = "#E3E3E3"
-    user_bg = "#282A2C"
-    ai_bg = "#1E1F20"
-    border_color = "#3E424A"
-    button_bg = "#1B4D89"
+    app_bg = "#0E1117"
+    text_color = "#FAFAFA"
+    sidebar_bg = "#262730"
+    input_bg = "#262730"
+    input_text = "#FAFAFA"
+    user_bg = "#1A73E8"  # พื้นหลังแชทฝั่งคน (สีน้ำเงิน)
+    user_text = "#FFFFFF"
+    ai_bg = "#262730"
+    border_color = "#4B4C53"
+    button_bg = "#1A73E8"
     button_text = "#FFFFFF"
 
 st.markdown(f"""
     <style>
-    .stApp {{
-        background: {app_bg} !important;
+    /* ตั้งค่าพื้นหลังแอปทั้งหมด */
+    .stApp, .stApp > header {{
+        background-color: {app_bg} !important;
         color: {text_color} !important;
     }}
-    header {{visibility: hidden;}}
+    header {{ visibility: hidden; }}
     
     p, span, label, h1, h2, h3, h4, h5, h6 {{
         color: {text_color} !important;
     }}
     
+    /* ตั้งค่า Sidebar */
     section[data-testid="stSidebar"] {{
         background-color: {sidebar_bg} !important;
         border-right: 1px solid {border_color} !important;
     }}
     
+    /* ซ่อนขอบกรอบของ st.form */
     [data-testid="stForm"] {{
         border: none !important;
         padding: 0 !important;
+        background-color: transparent !important;
     }}
     
-    .stButton>button {{
+    /* ปรับแต่งปุ่ม Button */
+    .stButton > button {{
         background-color: {button_bg} !important;
         color: {button_text} !important;
-        border-radius: 25px !important;
-        border: none !important;
+        border-radius: 8px !important;
+        border: 1px solid {border_color} !important;
         font-weight: 500 !important;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        padding: 0.5rem 1rem !important;
+    }}
+    .stButton > button:hover {{
+        opacity: 0.8;
     }}
     
-    div[data-baseweb="input"],
-    div[data-baseweb="base-input"],
-    div[data-baseweb="select"],
+    /* ปรับแต่งช่องกรอกข้อมูล (Text Input, Password, Selectbox) */
+    div[data-baseweb="input"] > div,
     div[data-baseweb="select"] > div,
     .stTextInput > div > div {{
         background-color: {input_bg} !important;
         color: {input_text} !important;
         border: 1px solid {border_color} !important;
-        border-radius: 12px !important;
+        border-radius: 8px !important;
     }}
     
-    .stTextInput input {{
-        background-color: transparent !important;
+    /* ปรับสีตัวอักษรในช่องกรอกข้อมูล */
+    input, select, textarea, div[data-baseweb="select"] * {{
+        color: {input_text} !important;
+        -webkit-text-fill-color: {input_text} !important;
+    }}
+    div[data-baseweb="input"] svg, div[data-baseweb="select"] svg {{
+        fill: {input_text} !important;
+    }}
+
+    /* ปรับพื้นหลังแชทด้านล่างสุด (แก้ปัญหาแถบขาวลอย) */
+    div[data-testid="stBottomBlock"] > div,
+    div[data-testid="stBottomBlock"] {{
+        background-color: {app_bg} !important;
+    }}
+    
+    /* กล่องพิมพ์แชท */
+    div[data-testid="stChatInput"] {{
+        background-color: {input_bg} !important;
+        border: 1px solid {border_color} !important;
+        border-radius: 20px !important;
+    }}
+    div[data-testid="stChatInput"] textarea {{
+        background-color: {input_bg} !important;
         color: {input_text} !important;
         -webkit-text-fill-color: {input_text} !important;
     }}
 
-    div[data-baseweb="input"] svg,
-    div[data-baseweb="select"] svg {{
-        fill: {input_text} !important;
-    }}
-
-    div[data-testid="stChatInput"],
-    div[data-testid="stChatInput"] textarea {{
-        background-color: {input_bg} !important;
-        color: {input_text} !important;
-    }}
-    div[data-testid="stChatInput"] {{
-        border: 1px solid {border_color} !important;
-        border-radius: 28px !important;
-    }}
-
+    /* Title */
     .greeting-title {{
         font-size: 2.8rem;
         font-weight: 400;
@@ -163,30 +191,37 @@ st.markdown(f"""
         font-family: 'Google Sans', sans-serif, Segoe UI;
     }}
     
+    /* --------------------------------------
+       จัดวางแชท (Chat Bubbles)
+       -------------------------------------- */
+    /* กล่องข้อความของผู้ใช้ (ชิดขวา) */
     [data-testid="stChatMessage"]:has([data-testid="chatAvatarIcon-user"]) {{
-        flex-direction: row-reverse;
-        text-align: right;
+        flex-direction: row-reverse !important;
         background-color: {user_bg} !important;
-        border-radius: 20px 20px 4px 20px;
-        margin-left: auto;
-        max-width: 75%;
+        border: 1px solid {border_color} !important;
+        border-radius: 20px 20px 4px 20px !important;
+        margin-left: auto !important;
+        margin-right: 0 !important;
+        max-width: 75% !important;
+    }}
+    [data-testid="stChatMessage"]:has([data-testid="chatAvatarIcon-user"]) [data-testid="stMarkdownContainer"] p {{
+        color: {user_text} !important;
     }}
     
+    /* กล่องข้อความของ AI (ชิดซ้าย) */
     [data-testid="stChatMessage"]:has([data-testid="chatAvatarIcon-assistant"]) {{
+        flex-direction: row !important;
         background-color: {ai_bg} !important;
-        border: 1px solid {border_color};
-        border-radius: 20px 20px 20px 4px;
-        margin-right: auto;
-        max-width: 80%;
+        border: 1px solid {border_color} !important;
+        border-radius: 20px 20px 20px 4px !important;
+        margin-right: auto !important;
+        margin-left: 0 !important;
+        max-width: 80% !important;
     }}
     </style>
 """, unsafe_allow_html=True)
 
 # --- 4. ระบบ LOGIN ---
-# ดึงรหัสผ่านจาก Secrets (ถ้าใน Secrets ไม่มีจะใช้ค่าสำรอง parinya_nnk / g@?OfEB8-q9X)
-valid_user = st.secrets.get("APP_USER", "parinya_nnk")
-valid_pass = st.secrets.get("APP_PASS", "g@?OfEB8-q9X")
-
 if not st.session_state.logged_in:
     st.markdown(f"<h2 style='text-align: center; margin-top: 3rem;'>{txt['login_title']}</h2>", unsafe_allow_html=True)
     col1, col2, col3 = st.columns([1, 2, 1])
