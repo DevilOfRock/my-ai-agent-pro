@@ -6,7 +6,8 @@ from langchain_community.tools import DuckDuckGoSearchRun
 from langchain_core.tools import tool
 
 load_dotenv()
-api_key = os.getenv("GOOGLE_API_KEY")
+# ดึง API Key จาก st.secrets บน Cloud ก่อน ถ้าไม่มีค่อยดึงจาก .env ในคอม
+api_key = st.secrets.get("GOOGLE_API_KEY") or os.getenv("GOOGLE_API_KEY")
 
 st.set_page_config(page_title="AI Agent Pro", page_icon="✨", layout="wide")
 
@@ -19,6 +20,9 @@ if "language" not in st.session_state:
 
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
+
+if "current_user" not in st.session_state:
+    st.session_state.current_user = ""
 
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
@@ -103,7 +107,6 @@ st.markdown(f"""
         border-right: 1px solid {border_color} !important;
     }}
     
-    /* ซ่อนขอบกรอบของ st.form เพื่อความสวยงาม */
     [data-testid="stForm"] {{
         border: none !important;
         padding: 0 !important;
@@ -179,21 +182,25 @@ st.markdown(f"""
     </style>
 """, unsafe_allow_html=True)
 
-# --- 4. ระบบ LOGIN (ใช้ st.form เพื่อรองรับการกด Enter) ---
+# --- 4. ระบบ LOGIN ---
+# ดึงรหัสผ่านจาก Secrets (ถ้าใน Secrets ไม่มีจะใช้ค่าสำรอง parinya_nnk / g@?OfEB8-q9X)
+valid_user = st.secrets.get("APP_USER", "parinya_nnk")
+valid_pass = st.secrets.get("APP_PASS", "g@?OfEB8-q9X")
+
 if not st.session_state.logged_in:
     st.markdown(f"<h2 style='text-align: center; margin-top: 3rem;'>{txt['login_title']}</h2>", unsafe_allow_html=True)
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
-        # ใช้ st.form ครอบเพื่อให้กด Enter submit ได้ทันที
         with st.form("login_form", clear_on_submit=False):
-            username = st.text_input("Username")
-            password = st.text_input("Password", type="password")
+            username = st.text_input("Username").strip()
+            password = st.text_input("Password", type="password").strip()
             st.write("")
             login_submitted = st.form_submit_button("Log In", use_container_width=True)
             
             if login_submitted:
-                if username == "admin" and password == "1234":
+                if username == str(valid_user).strip() and password == str(valid_pass).strip():
                     st.session_state.logged_in = True
+                    st.session_state.current_user = username
                     st.rerun()
                 else:
                     st.error("Username หรือ Password ไม่ถูกต้อง")
@@ -252,9 +259,10 @@ with st.sidebar:
         st.rerun()
 
     st.divider()
-    st.caption("Account: **admin**")
+    st.caption(f"Account: **{st.session_state.current_user}**")
     if st.button(txt["logout"], use_container_width=True):
         st.session_state.logged_in = False
+        st.session_state.current_user = ""
         st.rerun()
 
 # --- 6. TOOLS & AI LOGIC ---
