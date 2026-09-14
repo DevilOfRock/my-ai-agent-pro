@@ -80,22 +80,24 @@ txt = i18n[st.session_state.language]
 
 # --- 3. Dynamic CSS ---
 if st.session_state.theme == "Light":
-    app_bg = "#F4F7F9"
+    # 1. โหมด Light: กลับมาใช้พื้นหลังสีฟ้าอ่อนแบบไล่สี (Gradient)
+    app_bg = "radial-gradient(circle at top, #E8F0FE 0%, #F8FAFD 60%, #FFFFFF 100%)"
     text_color = "#1F2937"
-    sidebar_bg = "#EAF0F6"
-    input_bg = "#FFFFFF"
-    input_text = "#111827"
-    user_bg = "#D2E3FC"  # สีกล่องผู้ใช้ (ฟ้าอ่อน)
+    sidebar_bg = "#F0F4F9"
+    input_bg = "#FFFFFF"     # พื้นหลังช่องพิมพ์สีขาว
+    input_text = "#111827"   # ตัวหนังสือในช่องพิมพ์สีดำ
+    user_bg = "#D2E3FC"
     user_text = "#111827"
     ai_bg = "#FFFFFF"
-    border_color = "#D1D5DB"
+    border_color = "#C0C4CC"
 else: 
     app_bg = "#0E1117"
     text_color = "#FAFAFA"
     sidebar_bg = "#262730"
-    input_bg = "#262730"
-    input_text = "#FAFAFA"
-    user_bg = "#1A73E8"  # สีกล่องผู้ใช้ (น้ำเงินเข้ม)
+    # 2. โหมด Dark: บังคับให้ช่องพิมพ์เป็นสีขาว และตัวหนังสือพิมพ์เป็นสีดำ
+    input_bg = "#FFFFFF"     # พื้นหลังช่องพิมพ์เป็นสีขาว
+    input_text = "#111827"   # ตัวหนังสือที่พิมพ์ต้องเป็นสีดำเท่านั้น จะได้อ่านชัดเจน
+    user_bg = "#1A73E8"
     user_text = "#FFFFFF"
     ai_bg = "#262730"
     border_color = "#4B4C53"
@@ -104,7 +106,7 @@ st.markdown(f"""
     <style>
     /* พื้นหลังและตัวหนังสือหลัก */
     .stApp, .stApp > header {{
-        background-color: {app_bg} !important;
+        background: {app_bg} !important;
         color: {text_color} !important;
     }}
     header {{ visibility: hidden; }}
@@ -118,7 +120,7 @@ st.markdown(f"""
         border-right: 1px solid {border_color} !important;
     }}
     
-    /* แก้ไขปุ่มทั้งหมด (ปุ่ม Login และปุ่มเริ่มแชทใหม่) */
+    /* แก้ไขปุ่มทั้งหมด */
     [data-testid="stFormSubmitButton"] > button, .stButton > button {{
         background-color: #1A73E8 !important;
         color: #FFFFFF !important;
@@ -129,7 +131,7 @@ st.markdown(f"""
         color: #FFFFFF !important;
     }}
     
-    /* แก้ไขช่องกรอกข้อความและ Selectbox ให้เข้ากับ Dark Mode */
+    /* แก้ไขช่องกรอกข้อความและ Selectbox (บังคับพื้นหลังตามที่เราตั้ง) */
     div[data-baseweb="select"] > div, 
     div[data-baseweb="input"] > div, 
     .stTextInput div[data-baseweb="input"] {{
@@ -137,16 +139,18 @@ st.markdown(f"""
         border: 1px solid {border_color} !important;
     }}
     
-    /* สีข้อความในช่องกรอก */
-    div[data-baseweb="select"] span, div[data-baseweb="input"] input {{
+    /* บังคับสีข้อความในช่องกรอกให้เป็นสีดำเสมอ */
+    div[data-baseweb="select"] span, 
+    div[data-baseweb="input"] input, 
+    div[data-testid="stChatInput"] textarea {{
         color: {input_text} !important;
         -webkit-text-fill-color: {input_text} !important;
     }}
     div[data-baseweb="select"] svg {{ fill: {input_text} !important; }}
 
-    /* แก้แถบสีขาวด้านล่างสุดของช่องพิมพ์แชท */
+    /* แก้แถบสีด้านล่างสุดของช่องพิมพ์แชทให้โปร่งใสกลืนกับพื้นหลังหลัก */
     [data-testid="stBottom"], [data-testid="stBottom"] > div {{
-        background-color: {app_bg} !important;
+        background: transparent !important;
     }}
     
     /* กล่องพิมพ์แชท */
@@ -179,7 +183,7 @@ st.markdown(f"""
         max-width: 80% !important;
         border: none !important;
     }}
-    /* แก้สีข้อความของ User */
+    /* สีข้อความของ User */
     div[data-testid="stChatMessage"]:has([data-testid="chatAvatarIcon-user"]) div[data-testid="stMarkdownContainer"] p {{
         color: {user_text} !important;
     }}
