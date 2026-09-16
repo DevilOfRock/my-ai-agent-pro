@@ -1,5 +1,6 @@
 import os
 import streamlit as st
+import pandas as pd  # 🟢 1. นำเข้า pandas สำหรับจัดการไฟล์ตาราง
 from dotenv import load_dotenv
 
 from ui_config import setup_page, load_css
@@ -36,9 +37,9 @@ with st.sidebar:
     
     st.divider()
 
-    # 🟢 กล่องอัปโหลดไฟล์ (รวมทั้ง PDF และ รูปภาพ ไว้ในกล่องเดียว) 🟢
-    st.caption("📂 คลังความรู้ (Knowledge Base / Vision)")
-    uploaded_file = st.file_uploader("อัปโหลดไฟล์ (PDF หรือ รูปภาพ)", type=["pdf", "png", "jpg", "jpeg"])
+    # 🟢 2. อัปเดตประเภทไฟล์ที่รองรับ ให้รับ csv และ xlsx ด้วย 🟢
+    st.caption("📂 คลังความรู้ (PDF, รูปภาพ, ตารางข้อมูล)")
+    uploaded_file = st.file_uploader("อัปโหลด (PDF, PNG, JPG, CSV, Excel)", type=["pdf", "png", "jpg", "jpeg", "csv", "xlsx"])
     
     file_context = ""
     image_data = None
@@ -48,9 +49,22 @@ with st.sidebar:
         with st.spinner("กำลังวิเคราะห์ไฟล์..."):
             if file_ext == "pdf":
                 file_context = read_pdf(uploaded_file)
-                st.success("อ่านไฟล์ PDF สำเร็จ! ถามเนื้อหาได้เลย")
+                st.success("อ่านไฟล์ PDF สำเร็จ!")
+            elif file_ext in ["csv", "xlsx"]:
+                # 🟢 3. เพิ่มเงื่อนไขการอ่านไฟล์ตาราง 🟢
+                try:
+                    if file_ext == "csv":
+                        df = pd.read_csv(uploaded_file)
+                    else:
+                        df = pd.read_excel(uploaded_file)
+                    
+                    # แปลงตารางเป็นข้อความให้ AI นำไปประมวลผลต่อ
+                    file_context = f"ข้อมูลจากไฟล์ตาราง ({uploaded_file.name}):\n{df.to_string()}"
+                    st.success("อ่านข้อมูลตารางสำเร็จ!")
+                    st.dataframe(df.head(5)) # โชว์ตัวอย่างข้อมูล 5 บรรทัดแรกให้ผู้ใช้ดู
+                except Exception as e:
+                    st.error(f"เกิดข้อผิดพลาดในการอ่านไฟล์ตาราง: {e}")
             else:
-                # ถ้าเป็นรูปภาพ ให้โหลดเก็บไว้ และแสดงรูปตัวอย่าง
                 image_data = uploaded_file.getvalue()
                 st.image(uploaded_file, caption="อัปโหลดรูปภาพสำเร็จ!", use_container_width=True)
     
@@ -99,7 +113,6 @@ if final_input:
 
     with st.chat_message("assistant"):
         with st.spinner("Processing..."):
-            # 🟢 ส่งทั้ง file_context และ image_data ไปให้ AI Engine 🟢
             final_text = get_ai_response(api_key, txt["sys_prompt"], final_input, file_context, image_data)
             st.markdown(final_text)
             st.session_state.chat_history.append({"role": "assistant", "content": final_text})
