@@ -9,3 +9,4 @@ PyPDF2
 youtube-transcript-api
 pandas
 openpyxl
+streamlit-mic-recorder
