@@ -1,105 +1,93 @@
-import os
 import streamlit as st
-from dotenv import load_dotenv
+import PyPDF2
+import base64
+from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_community.tools import DuckDuckGoSearchRun
+from langchain_core.tools import tool
 
-from ui_config import setup_page, load_css
-from translations import i18n
-from auth import init_session_state, show_login_page
-from ai_engine import get_ai_response, read_pdf
+# นำเข้าระบบความจำที่เราเพิ่งสร้าง
+from memory import check_memory, teach_memory
 
-load_dotenv()
+# --- ประกาศ Tools ---
+search_tool = DuckDuckGoSearchRun()
 
-setup_page()
-init_session_state()
+@tool
+def calculate_vat(price: float) -> str:
+    """คำนวณราคาสินค้ารวมภาษี VAT 7%"""
+    return f"ราคารวม VAT 7% คือ {price * 1.07:.2f} บาท"
 
-txt = i18n[st.session_state.language]
-load_css(st.session_state.theme)
+tools = [search_tool, calculate_vat]
 
-if not show_login_page(txt):
-    st.stop()
+def extract_text(resp):
+    if isinstance(resp, str): return resp
+    if isinstance(resp, list) and len(resp) > 0:
+        if isinstance(resp[0], dict) and "text" in resp[0]:
+            return resp[0]["text"]
+    if hasattr(resp, "text"): return resp.text
+    return str(resp)
 
-try:
-    api_key = st.secrets["GOOGLE_API_KEY"]
-except Exception:
-    api_key = os.getenv("GOOGLE_API_KEY")
+def read_pdf(uploaded_file):
+    try:
+        reader = PyPDF2.PdfReader(uploaded_file)
+        text = ""
+        for page in reader.pages:
+            extracted = page.extract_text()
+            if extracted: text += extracted + "\n"
+        return text[:15000] 
+    except Exception as e:
+        return f"เกิดข้อผิดพลาดในการอ่าน PDF: {e}"
 
-# --- 4. SIDEBAR ---
-with st.sidebar:
-    st.subheader("✨ AI Agent Pro")
-    if st.button(txt["new_chat"], use_container_width=True):
-        st.session_state.chat_history = []
-        st.rerun()
-        
-    if st.session_state.chat_history:
-        chat_export = "".join([f"{'User' if msg['role'] == 'user' else 'AI'}: {msg['content']}\n\n" for msg in st.session_state.chat_history])
-        st.download_button(label="💾 ดาวน์โหลดประวัติแชท", data=chat_export, file_name="chat_history.txt", mime="text/plain", use_container_width=True)
-    
-    st.divider()
-
-    # 🟢 กล่องอัปโหลดไฟล์ (รวมทั้ง PDF และ รูปภาพ ไว้ในกล่องเดียว) 🟢
-    st.caption("📂 คลังความรู้ (Knowledge Base / Vision)")
-    uploaded_file = st.file_uploader("อัปโหลดไฟล์ (PDF หรือ รูปภาพ)", type=["pdf", "png", "jpg", "jpeg"])
-    
-    file_context = ""
-    image_data = None
-    
-    if uploaded_file is not None:
-        file_ext = uploaded_file.name.split('.')[-1].lower()
-        with st.spinner("กำลังวิเคราะห์ไฟล์..."):
-            if file_ext == "pdf":
-                file_context = read_pdf(uploaded_file)
-                st.success("อ่านไฟล์ PDF สำเร็จ! ถามเนื้อหาได้เลย")
+# 🟢 สังเกตตรงนี้ครับ เราเพิ่มตัวแปร image_data=None เข้ามารับรูปภาพแล้ว 🟢
+def get_ai_response(api_key, sys_prompt, final_input, file_context="", image_data=None):
+    try:
+        # 1. ระบบจำ (Memory)
+        if final_input.startswith("สอนAI:"):
+            parts = final_input.replace("สอนAI:", "").split("=")
+            if len(parts) == 2:
+                teach_memory(parts[0].strip(), parts[1].strip())
+                return f"🧠 จำไว้แล้วครับ! ถ้ามีคนถามว่า '{parts[0].strip()}' ผมจะตอบว่า '{parts[1].strip()}' ทันทีครับ"
             else:
-                # ถ้าเป็นรูปภาพ ให้โหลดเก็บไว้ และแสดงรูปตัวอย่าง
-                image_data = uploaded_file.getvalue()
-                st.image(uploaded_file, caption="อัปโหลดรูปภาพสำเร็จ!", use_container_width=True)
-    
-    st.divider()
-    st.caption(txt["settings"])
-    
-    selected_lang = st.selectbox(txt["lang_label"], ["ไทย", "English", "中文"], key="sb_lang", index=["ไทย", "English", "中文"].index(st.session_state.language))
-    if selected_lang != st.session_state.language:
-        st.session_state.language = selected_lang
-        st.rerun()
+                return "รูปแบบการสอนไม่ถูกต้องครับ ลอง: สอนAI: คำถาม = คำตอบ"
+
+        cached_answer = check_memory(final_input)
+        if cached_answer:
+            return f"⚡ [ตอบจากความจำ]: {cached_answer}"
+
+        # 2. จัดเตรียมบริบทจาก PDF (ถ้ามี)
+        if file_context:
+            sys_prompt += f"\n\n[ข้อมูลอ้างอิงจากไฟล์เอกสารที่อัปโหลด: ให้ตอบคำถามโดยอิงจากข้อมูลต่อไปนี้]\n{file_context}"
+
+        llm = ChatGoogleGenerativeAI(model="gemini-3.6-flash", google_api_key=api_key)
+        llm_with_tools = llm.bind_tools(tools)
         
-    selected_theme = st.radio(txt["theme_label"], ["Light", "Dark"], key="sb_theme", horizontal=True, index=0 if st.session_state.theme == "Light" else 1)
-    if selected_theme != st.session_state.theme:
-        st.session_state.theme = selected_theme
-        st.rerun()
+        # 3. สร้าง Payload ข้อความส่งให้ AI
+        messages_payload = [("system", sys_prompt)]
+        
+        for i, msg in enumerate(st.session_state.chat_history):
+            # 🟢 ถ้าเป็นข้อความล่าสุดและมีรูปภาพแนบมาด้วย ให้รวมรูปภาพส่งไปด้วย 🟢
+            if i == len(st.session_state.chat_history) - 1 and image_data and msg["role"] == "user":
+                b64_img = base64.b64encode(image_data).decode('utf-8')
+                user_content = [
+                    {"type": "text", "text": msg["content"]},
+                    {"type": "image_url", "image_url": f"data:image/jpeg;base64,{b64_img}"}
+                ]
+                messages_payload.append(("user", user_content))
+            else:
+                messages_payload.append((msg["role"], msg["content"]))
 
-    st.divider()
-    st.caption(f"Account: **{st.session_state.current_user}**")
-    if st.button(txt["logout"], use_container_width=True):
-        st.session_state.logged_in = False
-        st.session_state.current_user = ""
-        st.rerun()
-
-# --- 5. หน้าแชทหลัก (Main Chat UI) ---
-prompt_to_send = None
-if not st.session_state.chat_history:
-    st.markdown(f"<div class='greeting-title'>{txt['greeting']}</div>", unsafe_allow_html=True)
-    st.markdown("<p style='text-align: center; color: gray; margin-bottom: 2rem;'>✨ เลือกคำถามด่วนด้านล่าง หรือพิมพ์คำถามของคุณเองได้เลย</p>", unsafe_allow_html=True)
-    
-    q_col1, q_col2, q_col3 = st.columns(3)
-    if q_col1.button("📰 อัปเดตข่าวเทคโนโลยี", use_container_width=True): prompt_to_send = "ช่วยสรุปข่าวเทคโนโลยีที่น่าสนใจในช่วงนี้ให้ฟังหน่อย"
-    if q_col2.button("⛅ เช็คสภาพอากาศ", use_container_width=True): prompt_to_send = "สภาพอากาศในกรุงเทพวันนี้เป็นอย่างไรบ้าง?"
-    if q_col3.button("📧 ช่วยร่างอีเมล", use_container_width=True): prompt_to_send = "ช่วยร่างอีเมลขอนัดประชุมงานกับลูกค้าอย่างสุภาพให้หน่อย"
-
-for message in st.session_state.chat_history:
-    with st.chat_message(message["role"]):
-        st.markdown(message["content"])
-
-user_input = st.chat_input(txt["input_placeholder"])
-final_input = prompt_to_send or user_input
-
-if final_input:
-    st.session_state.chat_history.append({"role": "user", "content": final_input})
-    with st.chat_message("user"): 
-        st.markdown(final_input)
-
-    with st.chat_message("assistant"):
-        with st.spinner("Processing..."):
-            # 🟢 ส่งทั้ง file_context และ image_data ไปให้ AI Engine 🟢
-            final_text = get_ai_response(api_key, txt["sys_prompt"], final_input, file_context, image_data)
-            st.markdown(final_text)
-            st.session_state.chat_history.append({"role": "assistant", "content": final_text})
+        response = llm_with_tools.invoke(messages_payload)
+        
+        if response.tool_calls:
+            tc = response.tool_calls[0]
+            if tc["name"] == "duckduckgo_search":
+                query = tc["args"].get("query", final_input)
+                sr = search_tool.invoke(query)
+                summary = llm.invoke(f"จากข้อมูล: {sr} จงตอบ: {final_input} เป็นภาษา {st.session_state.language}")
+                return extract_text(summary.content)
+            elif tc["name"] == "calculate_vat":
+                return calculate_vat.invoke({"price": tc["args"].get("price", 0)})
+        else:
+            return extract_text(response.content)
+            
+    except Exception as e:
+        return f"เกิดข้อผิดพลาด: {e}"
