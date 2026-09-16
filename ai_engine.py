@@ -4,6 +4,9 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_community.tools import DuckDuckGoSearchRun
 from langchain_core.tools import tool
 
+# 🟢 นำเข้าระบบความจำที่เราเพิ่งสร้าง 🟢
+from memory import check_memory, teach_memory
+
 # --- ประกาศ Tools ---
 search_tool = DuckDuckGoSearchRun()
 
@@ -15,26 +18,20 @@ def calculate_vat(price: float) -> str:
 tools = [search_tool, calculate_vat]
 
 def extract_text(resp):
-    """ฟังก์ชันดึงข้อความจากผลลัพธ์ AI"""
-    if isinstance(resp, str):
-        return resp
+    if isinstance(resp, str): return resp
     if isinstance(resp, list) and len(resp) > 0:
         if isinstance(resp[0], dict) and "text" in resp[0]:
             return resp[0]["text"]
-    if hasattr(resp, "text"):
-        return resp.text
+    if hasattr(resp, "text"): return resp.text
     return str(resp)
 
 def read_pdf(uploaded_file):
-    """ฟังก์ชันสกัดข้อความจากไฟล์ PDF"""
     try:
         reader = PyPDF2.PdfReader(uploaded_file)
         text = ""
         for page in reader.pages:
             extracted = page.extract_text()
-            if extracted:
-                text += extracted + "\n"
-        # จำกัดตัวอักษรไม่ให้ยาวเกินโควต้าหน่วยความจำของ AI
+            if extracted: text += extracted + "\n"
         return text[:15000] 
     except Exception as e:
         return f"เกิดข้อผิดพลาดในการอ่าน PDF: {e}"
@@ -42,11 +39,26 @@ def read_pdf(uploaded_file):
 def get_ai_response(api_key, sys_prompt, final_input, file_context=""):
     """ฟังก์ชันส่งคำถามให้ AI ประมวลผล"""
     try:
-        # หากมีการอัปโหลดไฟล์ ให้ยัดข้อมูลไฟล์เข้าไปเป็นความรู้พื้นฐานให้ AI
+        # 🟢 1. ตรวจสอบว่าเป็นการ "สอน AI" หรือไม่ (รูปแบบ: สอนAI: คำถาม = คำตอบ) 🟢
+        if final_input.startswith("สอนAI:"):
+            parts = final_input.replace("สอนAI:", "").split("=")
+            if len(parts) == 2:
+                q = parts[0].strip()
+                a = parts[1].strip()
+                teach_memory(q, a)
+                return f"🧠 จำไว้แล้วครับ! ถ้ามีคนถามว่า '{q}' ผมจะตอบว่า '{a}' ทันทีครับ"
+            else:
+                return "รูปแบบการสอนไม่ถูกต้องครับ ลองพิมพ์แบบนี้: สอนAI: ชื่อของคุณคืออะไร = ผมคือ AI Agent Pro ครับ"
+
+        # 🟢 2. ตรวจสอบสมองส่วนหน้า (Local Memory) ก่อน 🟢
+        cached_answer = check_memory(final_input)
+        if cached_answer:
+            return f"⚡ [ตอบจากความจำ]: {cached_answer}"
+
+        # 🟢 3. ถ้าไม่มีในความจำ ถึงจะวิ่งไปหา Gemini 🟢
         if file_context:
             sys_prompt += f"\n\n[ข้อมูลอ้างอิงจากไฟล์เอกสารที่ผู้ใช้อัปโหลด: ให้ตอบคำถามโดยอิงจากข้อมูลต่อไปนี้เป็นหลัก]\n{file_context}"
 
-        # แก้ไขชื่อโมเดลเป็น gemini-1.5-flash ที่ถูกต้อง
         llm = ChatGoogleGenerativeAI(model="gemini-3.6-flash", google_api_key=api_key)
         llm_with_tools = llm.bind_tools(tools)
         
@@ -64,5 +76,6 @@ def get_ai_response(api_key, sys_prompt, final_input, file_context=""):
                 return calculate_vat.invoke({"price": tc["args"].get("price", 0)})
         else:
             return extract_text(response.content)
+            
     except Exception as e:
         return f"เกิดข้อผิดพลาด: {e}"
