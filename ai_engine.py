@@ -15,7 +15,17 @@ tools = [search_tool, calculate_vat]
 
 def extract_text(resp):
     """ฟังก์ชันดึงข้อความจากผลลัพธ์ AI"""
-    if hasattr(resp, "text"): return resp.text
+    # ถ้าเป็น String อยู่แล้ว ให้ส่งคืนเลย
+    if isinstance(resp, str):
+        return resp
+    # ถ้ามาเป็น List ที่มี Dictionary อยู่ข้างใน (เช่น กรณีใช้ Tools)
+    if isinstance(resp, list) and len(resp) > 0:
+        if isinstance(resp[0], dict) and "text" in resp[0]:
+            return resp[0]["text"]
+    # ถ้ามี attribute .text
+    if hasattr(resp, "text"):
+        return resp.text
+    # ท้ายที่สุดถ้าไม่ตรงเงื่อนไขบน ค่อยแปลงเป็น String
     return str(resp)
 
 def get_ai_response(api_key, sys_prompt, final_input):
