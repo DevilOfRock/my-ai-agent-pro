@@ -11,74 +11,25 @@ from ai_engine import get_ai_response, read_pdf
 
 from db import init_db, load_chat_history, save_chat_history
 
-# 🟢 1. สั่งตั้งค่า Session และ DB ก่อนเพื่อน 🟢
+# 1. สั่งตั้งค่า Session และ DB
 setup_page()
 init_session_state()
 init_db()
 load_dotenv()
 
-# 🟢 2. เรียกใช้ภาษาและ CSS หลังจาก Session พร้อมแล้ว 🟢
 txt = i18n[st.session_state.language]
 load_css(st.session_state.theme)
 
-if not show_login_page(txt):
-    st.stop()
+# เตรียมตัวแปรไฟล์ไว้ก่อน
+file_context = ""
+image_data = None
 
-# โหลดประวัติแชทของผู้ใช้ทันทีที่ผ่านหน้า Login
-if "db_loaded" not in st.session_state or not st.session_state.db_loaded:
-    st.session_state.chat_history = load_chat_history(st.session_state.current_user)
-    st.session_state.db_loaded = True
-
-try:
-    api_key = st.secrets["GOOGLE_API_KEY"]
-except Exception:
-    api_key = os.getenv("GOOGLE_API_KEY")
-
-# --- 4. SIDEBAR ---
+# --- 2. SIDEBAR (ย้ายขึ้นมาไว้ข้างบน เพื่อให้แสดงตลอดเวลา) ---
 with st.sidebar:
     st.subheader("✨ AI Agent Pro")
-    if st.button(txt["new_chat"], use_container_width=True):
-        st.session_state.chat_history = []
-        save_chat_history(st.session_state.current_user, [])
-        st.rerun()
-        
-    if st.session_state.chat_history:
-        chat_export = "".join([f"{'User' if msg['role'] == 'user' else 'AI'}: {msg['content']}\n\n" for msg in st.session_state.chat_history])
-        st.download_button(label="💾 ดาวน์โหลดประวัติแชท", data=chat_export, file_name="chat_history.txt", mime="text/plain", use_container_width=True)
     
-    st.divider()
-
-    st.caption("📂 คลังความรู้ (PDF, รูปภาพ, ตารางข้อมูล)")
-    uploaded_file = st.file_uploader("อัปโหลด (PDF, PNG, JPG, CSV, Excel)", type=["pdf", "png", "jpg", "jpeg", "csv", "xlsx"])
-    
-    file_context = ""
-    image_data = None
-    
-    if uploaded_file is not None:
-        file_ext = uploaded_file.name.split('.')[-1].lower()
-        with st.spinner("กำลังวิเคราะห์ไฟล์..."):
-            if file_ext == "pdf":
-                file_context = read_pdf(uploaded_file)
-                st.success("อ่านไฟล์ PDF สำเร็จ!")
-            elif file_ext in ["csv", "xlsx"]:
-                try:
-                    if file_ext == "csv":
-                        df = pd.read_csv(uploaded_file)
-                    else:
-                        df = pd.read_excel(uploaded_file)
-                    
-                    file_context = f"ข้อมูลจากไฟล์ตาราง ({uploaded_file.name}):\n{df.to_string()}"
-                    st.success("อ่านข้อมูลตารางสำเร็จ!")
-                    st.dataframe(df.head(5))
-                except Exception as e:
-                    st.error(f"เกิดข้อผิดพลาดในการอ่านไฟล์ตาราง: {e}")
-            else:
-                image_data = uploaded_file.getvalue()
-                st.image(uploaded_file, caption="อัปโหลดรูปภาพสำเร็จ!", use_container_width=True)
-    
-    st.divider()
+    # 🟢 ส่วนนี้โชว์ตลอดเวลา (ให้เปลี่ยนภาษา/สี ได้แม้ยังไม่ล็อกอิน) 🟢
     st.caption(txt["settings"])
-    
     selected_lang = st.selectbox(txt["lang_label"], ["ไทย", "English", "中文"], key="sb_lang", index=["ไทย", "English", "中文"].index(st.session_state.language))
     if selected_lang != st.session_state.language:
         st.session_state.language = selected_lang
@@ -88,14 +39,69 @@ with st.sidebar:
     if selected_theme != st.session_state.theme:
         st.session_state.theme = selected_theme
         st.rerun()
-
+        
     st.divider()
-    st.caption(f"Account: **{st.session_state.current_user}**")
-    if st.button(txt["logout"], use_container_width=True):
-        logout_user()
-        st.rerun()
+    
+    # 🟢 ส่วนนี้จะโชว์ก็ต่อเมื่อ "ล็อกอินสำเร็จแล้ว" เท่านั้น 🟢
+    if st.session_state.logged_in:
+        if st.button(txt["new_chat"], use_container_width=True):
+            st.session_state.chat_history = []
+            save_chat_history(st.session_state.current_user, [])
+            st.rerun()
+            
+        if st.session_state.chat_history:
+            chat_export = "".join([f"{'User' if msg['role'] == 'user' else 'AI'}: {msg['content']}\n\n" for msg in st.session_state.chat_history])
+            st.download_button(label="💾 ดาวน์โหลดประวัติแชท", data=chat_export, file_name="chat_history.txt", mime="text/plain", use_container_width=True)
+        
+        st.divider()
 
-# --- 5. หน้าแชทหลัก (Main Chat UI) ---
+        st.caption("📂 คลังความรู้ (PDF, รูปภาพ, ตารางข้อมูล)")
+        uploaded_file = st.file_uploader("อัปโหลด (PDF, PNG, JPG, CSV, Excel)", type=["pdf", "png", "jpg", "jpeg", "csv", "xlsx"])
+        
+        if uploaded_file is not None:
+            file_ext = uploaded_file.name.split('.')[-1].lower()
+            with st.spinner("กำลังวิเคราะห์ไฟล์..."):
+                if file_ext == "pdf":
+                    file_context = read_pdf(uploaded_file)
+                    st.success("อ่านไฟล์ PDF สำเร็จ!")
+                elif file_ext in ["csv", "xlsx"]:
+                    try:
+                        if file_ext == "csv":
+                            df = pd.read_csv(uploaded_file)
+                        else:
+                            df = pd.read_excel(uploaded_file)
+                        
+                        file_context = f"ข้อมูลจากไฟล์ตาราง ({uploaded_file.name}):\n{df.to_string()}"
+                        st.success("อ่านข้อมูลตารางสำเร็จ!")
+                        st.dataframe(df.head(5))
+                    except Exception as e:
+                        st.error(f"เกิดข้อผิดพลาดในการอ่านไฟล์ตาราง: {e}")
+                else:
+                    image_data = uploaded_file.getvalue()
+                    st.image(uploaded_file, caption="อัปโหลดรูปภาพสำเร็จ!", use_container_width=True)
+        
+        st.divider()
+        st.caption(f"Account: **{st.session_state.current_user}**")
+        if st.button(txt["logout"], use_container_width=True):
+            logout_user()
+            st.rerun()
+
+
+# --- 3. หยุดโค้ดตรงนี้ ถ้ายังไม่ล็อกอิน ---
+if not show_login_page(txt):
+    st.stop()
+
+
+# --- 4. โค้ดด้านล่างนี้จะทำงานเมื่อล็อกอินผ่านแล้วเท่านั้น ---
+if "db_loaded" not in st.session_state or not st.session_state.db_loaded:
+    st.session_state.chat_history = load_chat_history(st.session_state.current_user)
+    st.session_state.db_loaded = True
+
+try:
+    api_key = st.secrets["GOOGLE_API_KEY"]
+except Exception:
+    api_key = os.getenv("GOOGLE_API_KEY")
+
 prompt_to_send = None
 if not st.session_state.chat_history:
     st.markdown(f"<div class='greeting-title'>{txt['greeting']}</div>", unsafe_allow_html=True)
