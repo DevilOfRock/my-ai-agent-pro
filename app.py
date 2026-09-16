@@ -2,21 +2,19 @@ import os
 import streamlit as st
 import pandas as pd
 from dotenv import load_dotenv
-from streamlit_mic_recorder import speech_to_text
 
 from ui_config import setup_page, load_css
 from translations import i18n
-from auth import init_session_state, show_login_page, logout_user
+from auth import init_session_state, show_login_page
 from ai_engine import get_ai_response, read_pdf
+
 from db import init_db, load_chat_history, save_chat_history
+init_db()
 
 load_dotenv()
+
 setup_page()
-
-# 🟢 ต้องตั้งค่า Session State ก่อนเรียกใช้ i18n 🟢
 init_session_state()
-
-init_db()
 
 txt = i18n[st.session_state.language]
 load_css(st.session_state.theme)
@@ -24,7 +22,7 @@ load_css(st.session_state.theme)
 if not show_login_page(txt):
     st.stop()
 
-# โหลดประวัติแชทอัตโนมัติเมื่อเข้าสู่ระบบสำเร็จ
+# 🟢 โหลดประวัติแชทของผู้ใช้คนนั้นทันทีหลังจากผ่านหน้า Login 🟢
 if "db_loaded" not in st.session_state or not st.session_state.db_loaded:
     st.session_state.chat_history = load_chat_history(st.session_state.current_user)
     st.session_state.db_loaded = True
@@ -91,10 +89,11 @@ with st.sidebar:
 
     st.divider()
     st.caption(f"Account: **{st.session_state.current_user}**")
-    
-    # 🟢 ปุ่ม Logout เรียกใช้ฟังก์ชันลบ Cookie 🟢
     if st.button(txt["logout"], use_container_width=True):
-        logout_user()
+        st.session_state.logged_in = False
+        st.session_state.current_user = ""
+        st.session_state.chat_history = []
+        st.session_state.db_loaded = False
         st.rerun()
 
 # --- 5. หน้าแชทหลัก (Main Chat UI) ---
@@ -112,14 +111,8 @@ for message in st.session_state.chat_history:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-# ส่วนระบบอัดเสียง
-voice_text = None
-col_mic, col_space = st.columns([1, 4])
-with col_mic:
-    voice_text = speech_to_text(language='th', start_prompt="🎙️ พูดสั่งงาน", stop_prompt="⏹️ หยุดฟัง", key='voice_input')
-
 user_input = st.chat_input(txt["input_placeholder"])
-final_input = prompt_to_send or voice_text or user_input
+final_input = prompt_to_send or user_input
 
 if final_input:
     st.session_state.chat_history.append({"role": "user", "content": final_input})
@@ -132,4 +125,5 @@ if final_input:
             st.markdown(final_text)
             st.session_state.chat_history.append({"role": "assistant", "content": final_text})
             
+            # บันทึกประวัติแชทลง SQLite ทุกครั้งที่ AI ตอบเสร็จ
             save_chat_history(st.session_state.current_user, st.session_state.chat_history)
