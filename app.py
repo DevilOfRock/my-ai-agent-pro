@@ -1,6 +1,6 @@
 import os
 import streamlit as st
-import pandas as pd  # 🟢 1. นำเข้า pandas สำหรับจัดการไฟล์ตาราง
+import pandas as pd
 from dotenv import load_dotenv
 
 from ui_config import setup_page, load_css
@@ -8,7 +8,6 @@ from translations import i18n
 from auth import init_session_state, show_login_page
 from ai_engine import get_ai_response, read_pdf
 
-# 🟢 นำเข้าฟังก์ชันจากไฟล์ db.py และสั่งทำงาน 🟢
 from db import init_db, load_chat_history, save_chat_history
 init_db()
 
@@ -23,8 +22,8 @@ load_css(st.session_state.theme)
 if not show_login_page(txt):
     st.stop()
 
-# 🟢 โหลดประวัติแชทจาก Database ทันทีที่ล็อกอินผ่าน (ทำแค่ครั้งเดียวต่อการโหลดเว็บ) 🟢
-if "db_loaded" not in st.session_state:
+# 🟢 โหลดประวัติแชทของผู้ใช้คนนั้นทันทีหลังจากผ่านหน้า Login 🟢
+if "db_loaded" not in st.session_state or not st.session_state.db_loaded:
     st.session_state.chat_history = load_chat_history(st.session_state.current_user)
     st.session_state.db_loaded = True
 
@@ -38,7 +37,6 @@ with st.sidebar:
     st.subheader("✨ AI Agent Pro")
     if st.button(txt["new_chat"], use_container_width=True):
         st.session_state.chat_history = []
-        # 🟢 เซฟแชทเปล่าๆ ทับลงไปใน Database ด้วย 🟢
         save_chat_history(st.session_state.current_user, [])
         st.rerun()
         
@@ -48,7 +46,6 @@ with st.sidebar:
     
     st.divider()
 
-    # 🟢 2. อัปเดตประเภทไฟล์ที่รองรับ ให้รับ csv และ xlsx ด้วย 🟢
     st.caption("📂 คลังความรู้ (PDF, รูปภาพ, ตารางข้อมูล)")
     uploaded_file = st.file_uploader("อัปโหลด (PDF, PNG, JPG, CSV, Excel)", type=["pdf", "png", "jpg", "jpeg", "csv", "xlsx"])
     
@@ -62,17 +59,15 @@ with st.sidebar:
                 file_context = read_pdf(uploaded_file)
                 st.success("อ่านไฟล์ PDF สำเร็จ!")
             elif file_ext in ["csv", "xlsx"]:
-                # 🟢 3. เพิ่มเงื่อนไขการอ่านไฟล์ตาราง 🟢
                 try:
                     if file_ext == "csv":
                         df = pd.read_csv(uploaded_file)
                     else:
                         df = pd.read_excel(uploaded_file)
                     
-                    # แปลงตารางเป็นข้อความให้ AI นำไปประมวลผลต่อ
                     file_context = f"ข้อมูลจากไฟล์ตาราง ({uploaded_file.name}):\n{df.to_string()}"
                     st.success("อ่านข้อมูลตารางสำเร็จ!")
-                    st.dataframe(df.head(5)) # โชว์ตัวอย่างข้อมูล 5 บรรทัดแรกให้ผู้ใช้ดู
+                    st.dataframe(df.head(5))
                 except Exception as e:
                     st.error(f"เกิดข้อผิดพลาดในการอ่านไฟล์ตาราง: {e}")
             else:
@@ -97,6 +92,8 @@ with st.sidebar:
     if st.button(txt["logout"], use_container_width=True):
         st.session_state.logged_in = False
         st.session_state.current_user = ""
+        st.session_state.chat_history = []
+        st.session_state.db_loaded = False
         st.rerun()
 
 # --- 5. หน้าแชทหลัก (Main Chat UI) ---
@@ -128,5 +125,5 @@ if final_input:
             st.markdown(final_text)
             st.session_state.chat_history.append({"role": "assistant", "content": final_text})
             
-            # 🟢 เซฟแชททั้งหมดลง Database อัตโนมัติหลัง AI ตอบเสร็จ 🟢
+            # บันทึกประวัติแชทลง SQLite ทุกครั้งที่ AI ตอบเสร็จ
             save_chat_history(st.session_state.current_user, st.session_state.chat_history)
