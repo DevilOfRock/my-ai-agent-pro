@@ -1,4 +1,5 @@
 import streamlit as st
+import PyPDF2
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_community.tools import DuckDuckGoSearchRun
 from langchain_core.tools import tool
@@ -15,26 +16,40 @@ tools = [search_tool, calculate_vat]
 
 def extract_text(resp):
     """ฟังก์ชันดึงข้อความจากผลลัพธ์ AI"""
-    # ถ้าเป็น String อยู่แล้ว ให้ส่งคืนเลย
     if isinstance(resp, str):
         return resp
-    # ถ้ามาเป็น List ที่มี Dictionary อยู่ข้างใน (เช่น กรณีใช้ Tools)
     if isinstance(resp, list) and len(resp) > 0:
         if isinstance(resp[0], dict) and "text" in resp[0]:
             return resp[0]["text"]
-    # ถ้ามี attribute .text
     if hasattr(resp, "text"):
         return resp.text
-    # ท้ายที่สุดถ้าไม่ตรงเงื่อนไขบน ค่อยแปลงเป็น String
     return str(resp)
 
-def get_ai_response(api_key, sys_prompt, final_input):
-    """ฟังก์ชันส่งคำถามให้ AI ประมวลผลแล้วส่งคำตอบกลับมา"""
+def read_pdf(uploaded_file):
+    """ฟังก์ชันสกัดข้อความจากไฟล์ PDF"""
     try:
-        llm = ChatGoogleGenerativeAI(model="gemini-3.6-flash", google_api_key=api_key)
+        reader = PyPDF2.PdfReader(uploaded_file)
+        text = ""
+        for page in reader.pages:
+            extracted = page.extract_text()
+            if extracted:
+                text += extracted + "\n"
+        # จำกัดตัวอักษรไม่ให้ยาวเกินโควต้าหน่วยความจำของ AI
+        return text[:15000] 
+    except Exception as e:
+        return f"เกิดข้อผิดพลาดในการอ่าน PDF: {e}"
+
+def get_ai_response(api_key, sys_prompt, final_input, file_context=""):
+    """ฟังก์ชันส่งคำถามให้ AI ประมวลผล"""
+    try:
+        # หากมีการอัปโหลดไฟล์ ให้ยัดข้อมูลไฟล์เข้าไปเป็นความรู้พื้นฐานให้ AI
+        if file_context:
+            sys_prompt += f"\n\n[ข้อมูลอ้างอิงจากไฟล์เอกสารที่ผู้ใช้อัปโหลด: ให้ตอบคำถามโดยอิงจากข้อมูลต่อไปนี้เป็นหลัก]\n{file_context}"
+
+        # แก้ไขชื่อโมเดลเป็น gemini-1.5-flash ที่ถูกต้อง
+        llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash", google_api_key=api_key)
         llm_with_tools = llm.bind_tools(tools)
         
-        # แนบประวัติการคุยเข้าไปด้วย
         messages_payload = [("system", sys_prompt)] + [(msg["role"], msg["content"]) for msg in st.session_state.chat_history]
         response = llm_with_tools.invoke(messages_payload)
         

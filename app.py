@@ -2,32 +2,22 @@ import os
 import streamlit as st
 from dotenv import load_dotenv
 
-# --- 1. Import โมดูลที่เราแยกเอาไว้ ---
 from ui_config import setup_page, load_css
 from translations import i18n
 from auth import init_session_state, show_login_page
-from ai_engine import get_ai_response
+from ai_engine import get_ai_response, read_pdf
 
 load_dotenv()
 
-# --- 2. โหลดตั้งค่าเริ่มต้น ---
 setup_page()
 init_session_state()
 
-# ดึงข้อความตามภาษาที่เลือก และโหลด CSS
 txt = i18n[st.session_state.language]
 load_css(st.session_state.theme)
 
-# --- 3. ระบบ LOGIN ---
-# ถ้ายังไม่ล็อกอิน ให้แสดงหน้าล็อกอิน แล้วหยุดการทำงาน (st.stop)
 if not show_login_page(txt):
     st.stop()
 
-# ========================================================
-# โค้ดด้านล่างนี้จะทำงาน ก็ต่อเมื่อ "ผู้ใช้ล็อกอินผ่านแล้ว" เท่านั้น
-# ========================================================
-
-# ดึง API KEY สำหรับ AI
 try:
     api_key = st.secrets["GOOGLE_API_KEY"]
 except Exception:
@@ -43,6 +33,17 @@ with st.sidebar:
     if st.session_state.chat_history:
         chat_export = "".join([f"{'User' if msg['role'] == 'user' else 'AI'}: {msg['content']}\n\n" for msg in st.session_state.chat_history])
         st.download_button(label="💾 ดาวน์โหลดประวัติแชท", data=chat_export, file_name="chat_history.txt", mime="text/plain", use_container_width=True)
+    
+    st.divider()
+    
+    # 🟢 เพิ่มระบบอัปโหลดไฟล์ PDF 🟢
+    st.caption("📂 คลังความรู้ (Knowledge Base)")
+    uploaded_file = st.file_uploader("อัปโหลดไฟล์ PDF", type=["pdf"])
+    file_context = ""
+    if uploaded_file is not None:
+        with st.spinner("กำลังวิเคราะห์ไฟล์..."):
+            file_context = read_pdf(uploaded_file)
+        st.success("อ่านไฟล์สำเร็จ! ถามเนื้อหาได้เลย")
     
     st.divider()
     st.caption(txt["settings"])
@@ -75,25 +76,21 @@ if not st.session_state.chat_history:
     if q_col2.button("⛅ เช็คสภาพอากาศ", use_container_width=True): prompt_to_send = "สภาพอากาศในกรุงเทพวันนี้เป็นอย่างไรบ้าง?"
     if q_col3.button("📧 ช่วยร่างอีเมล", use_container_width=True): prompt_to_send = "ช่วยร่างอีเมลขอนัดประชุมงานกับลูกค้าอย่างสุภาพให้หน่อย"
 
-# วนลูปแสดงประวัติการคุย
 for message in st.session_state.chat_history:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-# รับคำถาม (ไม่ว่าจะมาจากการกดปุ่ม Quick Prompt หรือพิมพ์เข้ามาเอง)
 user_input = st.chat_input(txt["input_placeholder"])
 final_input = prompt_to_send or user_input
 
-# ถ้ามีคำถาม ให้ประมวลผล
 if final_input:
-    # แสดงคำถามของผู้ใช้
     st.session_state.chat_history.append({"role": "user", "content": final_input})
     with st.chat_message("user"): 
         st.markdown(final_input)
 
-    # ดึงคำตอบจาก AI Engine และแสดงผล
     with st.chat_message("assistant"):
         with st.spinner("Processing..."):
-            final_text = get_ai_response(api_key, txt["sys_prompt"], final_input)
+            # 🟢 ส่ง file_context ไปให้ AI Engine ประมวลผลร่วมกับคำถาม 🟢
+            final_text = get_ai_response(api_key, txt["sys_prompt"], final_input, file_context)
             st.markdown(final_text)
             st.session_state.chat_history.append({"role": "assistant", "content": final_text})
