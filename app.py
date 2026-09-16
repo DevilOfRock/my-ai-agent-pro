@@ -43,7 +43,7 @@ with st.sidebar:
             
         st.divider()
         
-        # 🟢 เมนู Recents ที่มีปุ่มลบ 🟢
+        # 🟢 เมนู Recents 🟢
         st.caption("🕒 ประวัติการคุย (Recents)")
         recent_chats = get_recent_chats(st.session_state.current_user)
         
@@ -51,8 +51,8 @@ with st.sidebar:
             st.markdown("<p style='font-size: 0.8rem; color: gray;'>ยังไม่มีประวัติการคุย</p>", unsafe_allow_html=True)
         else:
             for chat in recent_chats:
-                # แบ่งพื้นที่เป็น 2 คอลัมน์ (ชื่อแชท 80% : ปุ่มลบ 20%)
-                col_title, col_del = st.columns([4, 1])
+                # ปรับสัดส่วนให้ปุ่ม 3 จุดเล็กแคบนิดเดียว (85% : 15%)
+                col_title, col_menu = st.columns([5, 1])
                 
                 with col_title:
                     # ปุ่มเปิดแชท
@@ -61,15 +61,16 @@ with st.sidebar:
                         st.session_state.chat_history = load_chat_history(chat['chat_id'])
                         st.rerun()
                 
-                with col_del:
-                    # ปุ่มลบแชท ❌
-                    if st.button("❌", key=f"del_{chat['chat_id']}", help="ลบประวัติแชทนี้"):
-                        delete_chat_history(chat['chat_id'])
-                        # ถ้าแชทที่ถูกลบ คือแชทที่กำลังเปิดดูอยู่ ให้เคลียร์หน้าจอเป็นเริ่มแชทใหม่
-                        if st.session_state.current_chat_id == chat['chat_id']:
-                            st.session_state.current_chat_id = generate_chat_id()
-                            st.session_state.chat_history = []
-                        st.rerun()
+                with col_menu:
+                    # 🟢 ใช้ popover สร้างเมนูจุด 3 จุด 🟢
+                    with st.popover("⋮", use_container_width=True):
+                        # ใส่ปุ่มลบซ่อนไว้ข้างใน
+                        if st.button("🗑️ ลบแชท", key=f"del_{chat['chat_id']}", use_container_width=True):
+                            delete_chat_history(chat['chat_id'])
+                            if st.session_state.current_chat_id == chat['chat_id']:
+                                st.session_state.current_chat_id = generate_chat_id()
+                                st.session_state.chat_history = []
+                            st.rerun()
         
         st.divider()
 
