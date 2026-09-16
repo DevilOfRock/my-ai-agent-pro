@@ -8,6 +8,10 @@ from translations import i18n
 from auth import init_session_state, show_login_page
 from ai_engine import get_ai_response, read_pdf
 
+# 🟢 นำเข้าฟังก์ชันจากไฟล์ db.py และสั่งทำงาน 🟢
+from db import init_db, load_chat_history, save_chat_history
+init_db()
+
 load_dotenv()
 
 setup_page()
@@ -19,6 +23,11 @@ load_css(st.session_state.theme)
 if not show_login_page(txt):
     st.stop()
 
+# 🟢 โหลดประวัติแชทจาก Database ทันทีที่ล็อกอินผ่าน (ทำแค่ครั้งเดียวต่อการโหลดเว็บ) 🟢
+if "db_loaded" not in st.session_state:
+    st.session_state.chat_history = load_chat_history(st.session_state.current_user)
+    st.session_state.db_loaded = True
+
 try:
     api_key = st.secrets["GOOGLE_API_KEY"]
 except Exception:
@@ -29,6 +38,8 @@ with st.sidebar:
     st.subheader("✨ AI Agent Pro")
     if st.button(txt["new_chat"], use_container_width=True):
         st.session_state.chat_history = []
+        # 🟢 เซฟแชทเปล่าๆ ทับลงไปใน Database ด้วย 🟢
+        save_chat_history(st.session_state.current_user, [])
         st.rerun()
         
     if st.session_state.chat_history:
@@ -106,7 +117,7 @@ for message in st.session_state.chat_history:
 user_input = st.chat_input(txt["input_placeholder"])
 final_input = prompt_to_send or user_input
 
-if final_input:
+iif final_input:
     st.session_state.chat_history.append({"role": "user", "content": final_input})
     with st.chat_message("user"): 
         st.markdown(final_input)
@@ -116,3 +127,6 @@ if final_input:
             final_text = get_ai_response(api_key, txt["sys_prompt"], final_input, file_context, image_data)
             st.markdown(final_text)
             st.session_state.chat_history.append({"role": "assistant", "content": final_text})
+            
+            # 🟢 เซฟแชททั้งหมดลง Database อัตโนมัติหลัง AI ตอบเสร็จ 🟢
+            save_chat_history(st.session_state.current_user, st.session_state.chat_history)
