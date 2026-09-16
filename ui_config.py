@@ -1,4 +1,3 @@
-# ui_config.py
 import streamlit as st
 
 def setup_page():
@@ -37,8 +36,20 @@ def load_css(theme):
         
         section[data-testid="stSidebar"] {{ background-color: {sidebar_bg} !important; border-right: 1px solid {border_color} !important; }}
         
-        [data-testid="stFormSubmitButton"] > button, .stButton > button {{ background-color: #1A73E8 !important; color: #FFFFFF !important; border-radius: 8px !important; border: none !important; }}
-        [data-testid="stFormSubmitButton"] p, .stButton p {{ color: #FFFFFF !important; }}
+        /* 🟢 เพิ่ม [data-testid="stDownloadButton"] เข้าไปเพื่อให้ปุ่มดาวน์โหลดเป็นสีน้ำเงินเหมือนเพื่อนๆ */
+        [data-testid="stFormSubmitButton"] > button, 
+        .stButton > button, 
+        [data-testid="stDownloadButton"] > button {{ 
+            background-color: #1A73E8 !important; 
+            color: #FFFFFF !important; 
+            border-radius: 8px !important; 
+            border: none !important; 
+        }}
+        [data-testid="stFormSubmitButton"] p, 
+        .stButton p, 
+        [data-testid="stDownloadButton"] p {{ 
+            color: #FFFFFF !important; 
+        }}
         
         div[data-baseweb="select"] > div, div[data-baseweb="input"] > div, .stTextInput div[data-baseweb="input"] {{ background-color: {input_bg} !important; border: 1px solid {border_color} !important; }}
         
