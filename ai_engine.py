@@ -47,7 +47,7 @@ def get_ai_response(api_key, sys_prompt, final_input, file_context=""):
             sys_prompt += f"\n\n[ข้อมูลอ้างอิงจากไฟล์เอกสารที่ผู้ใช้อัปโหลด: ให้ตอบคำถามโดยอิงจากข้อมูลต่อไปนี้เป็นหลัก]\n{file_context}"
 
         # แก้ไขชื่อโมเดลเป็น gemini-1.5-flash ที่ถูกต้อง
-        llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash", google_api_key=api_key)
+        llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", google_api_key=api_key)
         llm_with_tools = llm.bind_tools(tools)
         
         messages_payload = [("system", sys_prompt)] + [(msg["role"], msg["content"]) for msg in st.session_state.chat_history]
