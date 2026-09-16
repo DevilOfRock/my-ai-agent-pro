@@ -4,8 +4,8 @@ import datetime
 
 # ตารางจำลองผู้ใช้งาน (ในระบบจริงสามารถดึงจาก DB ได้)
 USERS = {
-    "admin": "1234",
-    "parinya_nnk": "1234"
+    "admin": "g@?OfEB8-q9X",
+    "parinya_nnk": "g@?OfEB8-q9X"
 }
 
 def get_cookie_manager():
