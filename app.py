@@ -9,15 +9,13 @@ from translations import i18n
 from auth import init_session_state as auth_init_session, show_login_page, logout_user
 from ai_engine import get_ai_response, read_pdf
 
-# 🟢 นำเข้าฟังก์ชันจาก db.py ระบบใหม่ 🟢
-from db import init_db, get_recent_chats, load_chat_history, save_chat_history, generate_chat_id
+# 🟢 เพิ่ม delete_chat_history เข้ามา 🟢
+from db import init_db, get_recent_chats, load_chat_history, save_chat_history, generate_chat_id, delete_chat_history
 
 setup_page()
 
-# 🟢 ฟังก์ชันเตรียมตัวแปรสำหรับระบบแชทแบบหลายห้อง 🟢
 def init_chat_session():
     auth_init_session()
-    # ถ้ายังไม่มี ID ห้องแชท ให้สร้างใหม่
     if "current_chat_id" not in st.session_state:
         st.session_state.current_chat_id = generate_chat_id()
     if "chat_history" not in st.session_state:
@@ -38,7 +36,6 @@ with st.sidebar:
     st.subheader("✨ AI Agent Pro")
     
     if st.session_state.logged_in:
-        # 🟢 ปุ่มเริ่มแชทใหม่ (สร้างกล่องแชทใหม่) 🟢
         if st.button("➕ " + txt.get("new_chat", "เริ่มแชทใหม่"), use_container_width=True):
             st.session_state.current_chat_id = generate_chat_id()
             st.session_state.chat_history = []
@@ -46,7 +43,7 @@ with st.sidebar:
             
         st.divider()
         
-        # 🟢 เมนู Recents (ดึงประวัติการคุยย้อนหลัง) 🟢
+        # 🟢 เมนู Recents ที่มีปุ่มลบ 🟢
         st.caption("🕒 ประวัติการคุย (Recents)")
         recent_chats = get_recent_chats(st.session_state.current_user)
         
@@ -54,11 +51,25 @@ with st.sidebar:
             st.markdown("<p style='font-size: 0.8rem; color: gray;'>ยังไม่มีประวัติการคุย</p>", unsafe_allow_html=True)
         else:
             for chat in recent_chats:
-                # 🟢 สร้างปุ่มสำหรับแต่ละแชท พอกดปุ๊บให้โหลดข้อมูลแชทนั้นๆ 🟢
-                if st.button(f"💬 {chat['title']}", key=chat['chat_id'], use_container_width=True):
-                    st.session_state.current_chat_id = chat['chat_id']
-                    st.session_state.chat_history = load_chat_history(chat['chat_id'])
-                    st.rerun()
+                # แบ่งพื้นที่เป็น 2 คอลัมน์ (ชื่อแชท 80% : ปุ่มลบ 20%)
+                col_title, col_del = st.columns([4, 1])
+                
+                with col_title:
+                    # ปุ่มเปิดแชท
+                    if st.button(f"💬 {chat['title']}", key=f"btn_{chat['chat_id']}", use_container_width=True):
+                        st.session_state.current_chat_id = chat['chat_id']
+                        st.session_state.chat_history = load_chat_history(chat['chat_id'])
+                        st.rerun()
+                
+                with col_del:
+                    # ปุ่มลบแชท ❌
+                    if st.button("❌", key=f"del_{chat['chat_id']}", help="ลบประวัติแชทนี้"):
+                        delete_chat_history(chat['chat_id'])
+                        # ถ้าแชทที่ถูกลบ คือแชทที่กำลังเปิดดูอยู่ ให้เคลียร์หน้าจอเป็นเริ่มแชทใหม่
+                        if st.session_state.current_chat_id == chat['chat_id']:
+                            st.session_state.current_chat_id = generate_chat_id()
+                            st.session_state.chat_history = []
+                        st.rerun()
         
         st.divider()
 
@@ -152,13 +163,10 @@ if final_input:
             st.markdown(final_text)
             st.session_state.chat_history.append({"role": "assistant", "content": final_text})
             
-            # 🟢 ระบบดึงชื่อหัวข้อแชท: เอาประโยคแรกสุด 30 ตัวอักษร มาตั้งเป็นชื่อแชท 🟢
             chat_title = st.session_state.chat_history[0]["content"]
             if len(chat_title) > 30:
                 chat_title = chat_title[:30] + "..."
             
-            # 🟢 เซฟลง Database พร้อม ID แชท และชื่อหัวข้อ 🟢
             save_chat_history(st.session_state.current_chat_id, st.session_state.current_user, chat_title, st.session_state.chat_history)
             
-            # 🟢 สั่ง Refresh เพื่อให้เมนู Recents ทางซ้ายอัปเดต 🟢
             st.rerun()

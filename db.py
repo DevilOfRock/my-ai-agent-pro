@@ -75,3 +75,14 @@ def save_chat_history(chat_id, username, title, chat_data):
 def generate_chat_id():
     """สร้างรหัสห้องแชทใหม่แบบสุ่ม (ไม่ซ้ำแน่นอน)"""
     return str(uuid.uuid4())
+
+def delete_chat_history(chat_id):
+    """ลบประวัติแชทออกจากฐานข้อมูลอย่างถาวร"""
+    try:
+        conn = sqlite3.connect(DB_FILE)
+        c = conn.cursor()
+        c.execute("DELETE FROM chat_sessions WHERE chat_id=?", (chat_id,))
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"Error deleting chat: {e}")
