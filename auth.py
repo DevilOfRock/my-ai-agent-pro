@@ -1,52 +1,70 @@
 import streamlit as st
-import os
+import extra_streamlit_components as stx
+import datetime
+
+# ตารางจำลองผู้ใช้งาน (ในระบบจริงสามารถดึงจาก DB ได้)
+USERS = {
+    "admin": "1234",
+    "parinya_nnk": "1234"
+}
+
+def get_cookie_manager():
+    if "cookie_manager" not in st.session_state:
+        st.session_state.cookie_manager = stx.CookieManager(key="auth_cookies")
+    return st.session_state.cookie_manager
 
 def init_session_state():
-    """ฟังก์ชันตั้งค่าตัวแปรเริ่มต้น"""
-    if "theme" not in st.session_state: st.session_state.theme = "Dark" 
-    if "language" not in st.session_state: st.session_state.language = "ไทย"
-    if "logged_in" not in st.session_state: st.session_state.logged_in = False
-    if "current_user" not in st.session_state: st.session_state.current_user = ""
-    if "chat_history" not in st.session_state: st.session_state.chat_history = []
+    if "logged_in" not in st.session_state:
+        st.session_state.logged_in = False
+    if "current_user" not in st.session_state:
+        st.session_state.current_user = ""
+    if "chat_history" not in st.session_state:
+        st.session_state.chat_history = []
 
 def show_login_page(txt):
-    """ฟังก์ชันแสดงหน้าล็อกอิน คืนค่า True ถ้าล็อกอินผ่านแล้ว"""
+    cookie_manager = get_cookie_manager()
+    
+    # ดึงค่า User ที่เคยเซฟไว้ใน Cookie (ถ้ามี)
+    auth_cookie = cookie_manager.get(cookie="logged_in_user")
+    
+    # ถ้ามี Cookie ค้างอยู่ ให้ล็อกอินให้อัตโนมัติทันที
+    if auth_cookie and not st.session_state.logged_in:
+        st.session_state.logged_in = True
+        st.session_state.current_user = auth_cookie
+        return True
+
     if st.session_state.logged_in:
         return True
 
-    try:
-        valid_user = st.secrets["APP_USER"]
-        valid_pass = st.secrets["APP_PASS"]
-    except Exception:
-        valid_user = os.getenv("APP_USER", "parinya_nnk")
-        valid_pass = os.getenv("APP_PASS", "g@?OfEB8-q9X")
-
-    st.markdown(f"<h2 style='text-align: center; margin-top: 3rem;'>{txt['login_title']}</h2>", unsafe_allow_html=True)
+    st.markdown(f"<h2 style='text-align: center;'>🔑 {txt.get('login_title', 'เข้าสู่ระบบ')}</h2>", unsafe_allow_html=True)
+    
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
-        with st.form("login_form", clear_on_submit=False):
-            username = st.text_input("Username").strip()
-            password = st.text_input("Password", type="password").strip()
-            st.write("")
-            login_submitted = st.form_submit_button("Log In", use_container_width=True)
-            
-            if login_submitted:
-                if username == str(valid_user).strip() and password == str(valid_pass).strip():
-                    st.session_state.logged_in = True
-                    st.session_state.current_user = username
-                    st.rerun()
-                else:
-                    st.error("Username หรือ Password ไม่ถูกต้อง")
+        username = st.text_input("Username")
+        password = st.text_input("Password", type="password")
         
-        st.write("---")
-        sel_lang = st.selectbox(txt["lang_label"], ["ไทย", "English", "中文"], index=["ไทย", "English", "中文"].index(st.session_state.language))
-        if sel_lang != st.session_state.language:
-            st.session_state.language = sel_lang
-            st.rerun()
-
-        sel_theme = st.radio(txt["theme_label"], ["Light", "Dark"], horizontal=True, index=0 if st.session_state.theme == "Light" else 1)
-        if sel_theme != st.session_state.theme:
-            st.session_state.theme = sel_theme
-            st.rerun()
-            
+        if st.button(txt.get('login_btn', 'เข้าสู่ระบบ'), use_container_width=True):
+            if username in USERS and USERS[username] == password:
+                st.session_state.logged_in = True
+                st.session_state.current_user = username
+                
+                # 🟢 บันทึก Cookie ลงเครื่องผู้ใช้ ให้จำไว้ 7 วัน (ไม่ต้องกด Login ซ้ำเวลารีเฟรช) 🟢
+                expires_at = datetime.datetime.now() + datetime.timedelta(days=7)
+                cookie_manager.set("logged_in_user", username, expires_at=expires_at)
+                
+                st.success("เข้าสู่ระบบสำเร็จ!")
+                st.rerun()
+            else:
+                st.error("Username หรือ Password ไม่ถูกต้อง")
+                
     return False
+
+def logout_user():
+    """ฟังก์ชันเคลียร์สถานะตอนกดออกจากระบบ"""
+    cookie_manager = get_cookie_manager()
+    cookie_manager.delete("logged_in_user")
+    st.session_state.logged_in = False
+    st.session_state.current_user = ""
+    st.session_state.chat_history = []
+    if "db_loaded" in st.session_state:
+        st.session_state.db_loaded = False
