@@ -29,8 +29,14 @@ def load_css(theme):
 
     st.markdown(f"""
         <style>
-        .stApp, .stApp > header {{ background: {app_bg} !important; color: {text_color} !important; }}
-        header {{ visibility: hidden; }}
+        /* 1. ตั้งค่าสีพื้นหลังหลัก */
+        .stApp {{ background: {app_bg} !important; color: {text_color} !important; }}
+        
+        /* 2. ทำให้แถบ Header โปร่งใส (เพื่อโชว์ปุ่ม > แต่ไม่เห็นเป็นแถบหนาๆ) */
+        header {{ background: transparent !important; }}
+        
+        /* 3. ซ่อนเมนูด้านขวาบน (Deploy / จุด 3 จุดของ Streamlit) ไม่ให้มารกสายตา */
+        [data-testid="stToolbar"], [data-testid="stHeaderActionElements"] {{ visibility: hidden !important; }}
         
         p, span, label, h1, h2, h3, h4, h5, h6, li, ul, ol, a, strong, b, i, em {{ color: {text_color} !important; }}
         
@@ -68,8 +74,7 @@ def load_css(theme):
         div[data-testid="stChatMessage"]:has([data-testid*="assistant"]), div[data-testid="stChatMessage"]:has([data-testid*="Assistant"]) {{ flex-direction: row !important; background-color: {ai_bg} !important; margin-right: auto !important; margin-left: 0 !important; border-radius: 20px 20px 20px 4px !important; padding: 1rem 1.5rem !important; max-width: 80% !important; border: 1px solid {border_color} !important; }}
         div[data-testid="stChatMessage"]:has([data-testid*="assistant"]) [data-testid="stMarkdownContainer"] *, div[data-testid="stChatMessage"]:has([data-testid*="Assistant"]) [data-testid="stMarkdownContainer"] * {{ color: {ai_text} !important; }}
         
-
-       /* 🟢 แก้ไขสีกล่องอัปโหลดไฟล์ (File Uploader) ให้เห็นตัวหนังสือ 🟢 */
+        /* 🟢 แก้ไขสีกล่องอัปโหลดไฟล์ (File Uploader) ให้เห็นตัวหนังสือ 🟢 */
         [data-testid="stFileUploaderDropzone"] {{
             background-color: {input_bg} !important;
             border: 1px dashed {border_color} !important;
