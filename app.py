@@ -35,15 +35,24 @@ with st.sidebar:
         st.download_button(label="💾 ดาวน์โหลดประวัติแชท", data=chat_export, file_name="chat_history.txt", mime="text/plain", use_container_width=True)
     
     st.divider()
+
+    # 🟢 กล่องอัปโหลดไฟล์ (รวมทั้ง PDF และ รูปภาพ ไว้ในกล่องเดียว) 🟢
+    st.caption("📂 คลังความรู้ (Knowledge Base / Vision)")
+    uploaded_file = st.file_uploader("อัปโหลดไฟล์ (PDF หรือ รูปภาพ)", type=["pdf", "png", "jpg", "jpeg"])
     
-    # 🟢 เพิ่มระบบอัปโหลดไฟล์ PDF 🟢
-    st.caption("📂 คลังความรู้ (Knowledge Base)")
-    uploaded_file = st.file_uploader("อัปโหลดไฟล์ PDF", type=["pdf"])
     file_context = ""
+    image_data = None
+    
     if uploaded_file is not None:
+        file_ext = uploaded_file.name.split('.')[-1].lower()
         with st.spinner("กำลังวิเคราะห์ไฟล์..."):
-            file_context = read_pdf(uploaded_file)
-        st.success("อ่านไฟล์สำเร็จ! ถามเนื้อหาได้เลย")
+            if file_ext == "pdf":
+                file_context = read_pdf(uploaded_file)
+                st.success("อ่านไฟล์ PDF สำเร็จ! ถามเนื้อหาได้เลย")
+            else:
+                # ถ้าเป็นรูปภาพ ให้โหลดเก็บไว้ และแสดงรูปตัวอย่าง
+                image_data = uploaded_file.getvalue()
+                st.image(uploaded_file, caption="อัปโหลดรูปภาพสำเร็จ!", use_container_width=True)
     
     st.divider()
     st.caption(txt["settings"])
@@ -90,7 +99,7 @@ if final_input:
 
     with st.chat_message("assistant"):
         with st.spinner("Processing..."):
-            # 🟢 ส่ง file_context ไปให้ AI Engine ประมวลผลร่วมกับคำถาม 🟢
-            final_text = get_ai_response(api_key, txt["sys_prompt"], final_input, file_context)
+            # 🟢 ส่งทั้ง file_context และ image_data ไปให้ AI Engine 🟢
+            final_text = get_ai_response(api_key, txt["sys_prompt"], final_input, file_context, image_data)
             st.markdown(final_text)
             st.session_state.chat_history.append({"role": "assistant", "content": final_text})

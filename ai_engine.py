@@ -1,10 +1,11 @@
 import streamlit as st
 import PyPDF2
+import base64
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_community.tools import DuckDuckGoSearchRun
 from langchain_core.tools import tool
 
-# 🟢 นำเข้าระบบความจำที่เราเพิ่งสร้าง 🟢
+# นำเข้าระบบความจำที่เราเพิ่งสร้าง
 from memory import check_memory, teach_memory
 
 # --- ประกาศ Tools ---
@@ -36,33 +37,44 @@ def read_pdf(uploaded_file):
     except Exception as e:
         return f"เกิดข้อผิดพลาดในการอ่าน PDF: {e}"
 
-def get_ai_response(api_key, sys_prompt, final_input, file_context=""):
-    """ฟังก์ชันส่งคำถามให้ AI ประมวลผล"""
+# 🟢 เพิ่มตัวแปร image_data เพื่อรับรูปภาพ 🟢
+def get_ai_response(api_key, sys_prompt, final_input, file_context="", image_data=None):
     try:
-        # 🟢 1. ตรวจสอบว่าเป็นการ "สอน AI" หรือไม่ (รูปแบบ: สอนAI: คำถาม = คำตอบ) 🟢
+        # 1. ระบบจำ (Memory)
         if final_input.startswith("สอนAI:"):
             parts = final_input.replace("สอนAI:", "").split("=")
             if len(parts) == 2:
-                q = parts[0].strip()
-                a = parts[1].strip()
-                teach_memory(q, a)
-                return f"🧠 จำไว้แล้วครับ! ถ้ามีคนถามว่า '{q}' ผมจะตอบว่า '{a}' ทันทีครับ"
+                teach_memory(parts[0].strip(), parts[1].strip())
+                return f"🧠 จำไว้แล้วครับ! ถ้ามีคนถามว่า '{parts[0].strip()}' ผมจะตอบว่า '{parts[1].strip()}' ทันทีครับ"
             else:
-                return "รูปแบบการสอนไม่ถูกต้องครับ ลองพิมพ์แบบนี้: สอนAI: ชื่อของคุณคืออะไร = ผมคือ AI Agent Pro ครับ"
+                return "รูปแบบการสอนไม่ถูกต้องครับ ลอง: สอนAI: คำถาม = คำตอบ"
 
-        # 🟢 2. ตรวจสอบสมองส่วนหน้า (Local Memory) ก่อน 🟢
         cached_answer = check_memory(final_input)
         if cached_answer:
             return f"⚡ [ตอบจากความจำ]: {cached_answer}"
 
-        # 🟢 3. ถ้าไม่มีในความจำ ถึงจะวิ่งไปหา Gemini 🟢
+        # 2. จัดเตรียมบริบทจาก PDF (ถ้ามี)
         if file_context:
-            sys_prompt += f"\n\n[ข้อมูลอ้างอิงจากไฟล์เอกสารที่ผู้ใช้อัปโหลด: ให้ตอบคำถามโดยอิงจากข้อมูลต่อไปนี้เป็นหลัก]\n{file_context}"
+            sys_prompt += f"\n\n[ข้อมูลอ้างอิงจากไฟล์เอกสารที่อัปโหลด: ให้ตอบคำถามโดยอิงจากข้อมูลต่อไปนี้]\n{file_context}"
 
         llm = ChatGoogleGenerativeAI(model="gemini-3.6-flash", google_api_key=api_key)
         llm_with_tools = llm.bind_tools(tools)
         
-        messages_payload = [("system", sys_prompt)] + [(msg["role"], msg["content"]) for msg in st.session_state.chat_history]
+        # 3. สร้าง Payload ข้อความส่งให้ AI
+        messages_payload = [("system", sys_prompt)]
+        
+        for i, msg in enumerate(st.session_state.chat_history):
+            # 🟢 ถ้าเป็นข้อความล่าสุดและมีรูปภาพแนบมาด้วย ให้รวมรูปภาพส่งไปด้วย 🟢
+            if i == len(st.session_state.chat_history) - 1 and image_data and msg["role"] == "user":
+                b64_img = base64.b64encode(image_data).decode('utf-8')
+                user_content = [
+                    {"type": "text", "text": msg["content"]},
+                    {"type": "image_url", "image_url": f"data:image/jpeg;base64,{b64_img}"}
+                ]
+                messages_payload.append(("user", user_content))
+            else:
+                messages_payload.append((msg["role"], msg["content"]))
+
         response = llm_with_tools.invoke(messages_payload)
         
         if response.tool_calls:
