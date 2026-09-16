@@ -1,11 +1,11 @@
 import streamlit as st
 import PyPDF2
 import base64
+import datetime  # 🟢 1. นำเข้าไลบรารีสำหรับจัดการเวลา 🟢
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_community.tools import DuckDuckGoSearchRun
 from langchain_core.tools import tool
 
-# นำเข้าระบบความจำที่เราเพิ่งสร้าง
 from memory import check_memory, teach_memory
 
 # --- ประกาศ Tools ---
@@ -37,9 +37,12 @@ def read_pdf(uploaded_file):
     except Exception as e:
         return f"เกิดข้อผิดพลาดในการอ่าน PDF: {e}"
 
-# 🟢 สังเกตตรงนี้ครับ เราเพิ่มตัวแปร image_data=None เข้ามารับรูปภาพแล้ว 🟢
 def get_ai_response(api_key, sys_prompt, final_input, file_context="", image_data=None):
     try:
+        # 🟢 2. ดึงเวลาปัจจุบันของระบบ แล้วแอบยัดใส่ไปใน System Prompt 🟢
+        current_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        sys_prompt = f"[ข้อมูลระบบ: วันนี้คือวันที่และเวลา {current_time}]\n\n" + sys_prompt
+
         # 1. ระบบจำ (Memory)
         if final_input.startswith("สอนAI:"):
             parts = final_input.replace("สอนAI:", "").split("=")
@@ -64,7 +67,6 @@ def get_ai_response(api_key, sys_prompt, final_input, file_context="", image_dat
         messages_payload = [("system", sys_prompt)]
         
         for i, msg in enumerate(st.session_state.chat_history):
-            # 🟢 ถ้าเป็นข้อความล่าสุดและมีรูปภาพแนบมาด้วย ให้รวมรูปภาพส่งไปด้วย 🟢
             if i == len(st.session_state.chat_history) - 1 and image_data and msg["role"] == "user":
                 b64_img = base64.b64encode(image_data).decode('utf-8')
                 user_content = [
