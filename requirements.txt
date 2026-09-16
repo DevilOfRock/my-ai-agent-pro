@@ -10,3 +10,4 @@ youtube-transcript-api
 pandas
 openpyxl
 streamlit-mic-recorder
+extra-streamlit-components
