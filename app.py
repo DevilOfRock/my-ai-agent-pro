@@ -20,29 +20,14 @@ load_dotenv()
 txt = i18n[st.session_state.language]
 load_css(st.session_state.theme)
 
-# เตรียมตัวแปรไฟล์ไว้ก่อน
 file_context = ""
 image_data = None
 
-# --- 2. SIDEBAR (ย้ายขึ้นมาไว้ข้างบน เพื่อให้แสดงตลอดเวลา) ---
+# --- 2. SIDEBAR (จัดเรียงลำดับให้เหมือนเดิม) ---
 with st.sidebar:
     st.subheader("✨ AI Agent Pro")
     
-    # 🟢 ส่วนนี้โชว์ตลอดเวลา (ให้เปลี่ยนภาษา/สี ได้แม้ยังไม่ล็อกอิน) 🟢
-    st.caption(txt["settings"])
-    selected_lang = st.selectbox(txt["lang_label"], ["ไทย", "English", "中文"], key="sb_lang", index=["ไทย", "English", "中文"].index(st.session_state.language))
-    if selected_lang != st.session_state.language:
-        st.session_state.language = selected_lang
-        st.rerun()
-        
-    selected_theme = st.radio(txt["theme_label"], ["Light", "Dark"], key="sb_theme", horizontal=True, index=0 if st.session_state.theme == "Light" else 1)
-    if selected_theme != st.session_state.theme:
-        st.session_state.theme = selected_theme
-        st.rerun()
-        
-    st.divider()
-    
-    # 🟢 ส่วนนี้จะโชว์ก็ต่อเมื่อ "ล็อกอินสำเร็จแล้ว" เท่านั้น 🟢
+    # 🟢 โชว์ปุ่มแชทใหม่และกล่องอัปโหลด *เฉพาะตอนล็อกอินแล้ว* ไว้ด้านบน 🟢
     if st.session_state.logged_in:
         if st.button(txt["new_chat"], use_container_width=True):
             st.session_state.chat_history = []
@@ -81,18 +66,33 @@ with st.sidebar:
                     st.image(uploaded_file, caption="อัปโหลดรูปภาพสำเร็จ!", use_container_width=True)
         
         st.divider()
+
+    # 🟢 ส่วนการตั้งค่า โชว์เสมอ (ให้อยู่ตรงกลาง) 🟢
+    st.caption(txt["settings"])
+    selected_lang = st.selectbox(txt["lang_label"], ["ไทย", "English", "中文"], key="sb_lang", index=["ไทย", "English", "中文"].index(st.session_state.language))
+    if selected_lang != st.session_state.language:
+        st.session_state.language = selected_lang
+        st.rerun()
+        
+    selected_theme = st.radio(txt["theme_label"], ["Light", "Dark"], key="sb_theme", horizontal=True, index=0 if st.session_state.theme == "Light" else 1)
+    if selected_theme != st.session_state.theme:
+        st.session_state.theme = selected_theme
+        st.rerun()
+
+    # 🟢 โชว์ปุ่มออกจากระบบ ไว้ล่างสุด *เฉพาะตอนล็อกอินแล้ว* 🟢
+    if st.session_state.logged_in:
+        st.divider()
         st.caption(f"Account: **{st.session_state.current_user}**")
         if st.button(txt["logout"], use_container_width=True):
             logout_user()
             st.rerun()
-
 
 # --- 3. หยุดโค้ดตรงนี้ ถ้ายังไม่ล็อกอิน ---
 if not show_login_page(txt):
     st.stop()
 
 
-# --- 4. โค้ดด้านล่างนี้จะทำงานเมื่อล็อกอินผ่านแล้วเท่านั้น ---
+# --- 4. โค้ดห้องแชท (ทำงานเมื่อล็อกอินผ่านแล้ว) ---
 if "db_loaded" not in st.session_state or not st.session_state.db_loaded:
     st.session_state.chat_history = load_chat_history(st.session_state.current_user)
     st.session_state.db_loaded = True
