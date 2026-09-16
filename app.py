@@ -2,6 +2,7 @@ import os
 import streamlit as st
 import pandas as pd
 from dotenv import load_dotenv
+from streamlit_mic_recorder import speech_to_text  # 🟢 นำเข้าระบบอัดเสียง 🟢
 
 from ui_config import setup_page, load_css
 from translations import i18n
@@ -22,7 +23,7 @@ load_css(st.session_state.theme)
 if not show_login_page(txt):
     st.stop()
 
-# 🟢 โหลดประวัติแชทของผู้ใช้คนนั้นทันทีหลังจากผ่านหน้า Login 🟢
+# โหลดประวัติแชทของผู้ใช้ทันทีที่ผ่านหน้า Login
 if "db_loaded" not in st.session_state or not st.session_state.db_loaded:
     st.session_state.chat_history = load_chat_history(st.session_state.current_user)
     st.session_state.db_loaded = True
@@ -111,8 +112,16 @@ for message in st.session_state.chat_history:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
+# 🟢 3. เพิ่มส่วนควบคุมปุ่มสั่งงานด้วยเสียง 🟢
+voice_text = None
+col_mic, col_space = st.columns([1, 4])
+with col_mic:
+    # ปุ่มอัดเสียงภาษาไทย
+    voice_text = speech_to_text(language='th', start_prompt="🎙️ พูดสั่งงาน", stop_prompt="⏹️ หยุดฟัง", key='voice_input')
+
 user_input = st.chat_input(txt["input_placeholder"])
-final_input = prompt_to_send or user_input
+# รับค่าคำถามจาก ปุ่มกดด่วน OR คำพูดส่งเสียง OR การพิมพ์
+final_input = prompt_to_send or voice_text or user_input
 
 if final_input:
     st.session_state.chat_history.append({"role": "user", "content": final_input})
@@ -125,5 +134,4 @@ if final_input:
             st.markdown(final_text)
             st.session_state.chat_history.append({"role": "assistant", "content": final_text})
             
-            # บันทึกประวัติแชทลง SQLite ทุกครั้งที่ AI ตอบเสร็จ
             save_chat_history(st.session_state.current_user, st.session_state.chat_history)
