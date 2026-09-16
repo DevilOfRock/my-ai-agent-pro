@@ -20,6 +20,12 @@ def init_session_state():
         st.session_state.current_user = ""
     if "chat_history" not in st.session_state:
         st.session_state.chat_history = []
+        
+    # 🟢 เพิ่มการตั้งค่าภาษาและธีมเริ่มต้นกลับเข้ามา (ตรงนี้ที่หายไปครับ!) 🟢
+    if "language" not in st.session_state:
+        st.session_state.language = "ไทย"
+    if "theme" not in st.session_state:
+        st.session_state.theme = "Dark"
 
 def show_login_page(txt):
     cookie_manager = get_cookie_manager()
@@ -48,7 +54,7 @@ def show_login_page(txt):
                 st.session_state.logged_in = True
                 st.session_state.current_user = username
                 
-                # 🟢 บันทึก Cookie ลงเครื่องผู้ใช้ ให้จำไว้ 7 วัน (ไม่ต้องกด Login ซ้ำเวลารีเฟรช) 🟢
+                # บันทึก Cookie ลงเครื่องผู้ใช้ ให้จำไว้ 7 วัน
                 expires_at = datetime.datetime.now() + datetime.timedelta(days=7)
                 cookie_manager.set("logged_in_user", username, expires_at=expires_at)
                 
