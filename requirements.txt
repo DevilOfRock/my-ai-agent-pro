@@ -7,3 +7,5 @@ ddgs
 python-dotenv
 PyPDF2
 youtube-transcript-api
+pandas
+openpyxl
