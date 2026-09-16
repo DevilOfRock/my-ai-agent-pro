@@ -1,7 +1,7 @@
 import streamlit as st
 import PyPDF2
 import base64
-import datetime  # 🟢 1. นำเข้าไลบรารีสำหรับจัดการเวลา 🟢
+import datetime
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_community.tools import DuckDuckGoSearchRun
 from langchain_core.tools import tool
@@ -39,11 +39,12 @@ def read_pdf(uploaded_file):
 
 def get_ai_response(api_key, sys_prompt, final_input, file_context="", image_data=None):
     try:
-        # 🟢 2. ดึงเวลาปัจจุบันของระบบ แล้วแอบยัดใส่ไปใน System Prompt 🟢
-        current_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        # 🟢 1. ดึงเวลาปัจจุบัน (ของไทย) แล้วยัดใส่ System Prompt 🟢
+        tz_th = datetime.timezone(datetime.timedelta(hours=7))
+        current_time = datetime.datetime.now(tz_th).strftime("%Y-%m-%d %H:%M:%S")
         sys_prompt = f"[ข้อมูลระบบ: วันนี้คือวันที่และเวลา {current_time}]\n\n" + sys_prompt
 
-        # 1. ระบบจำ (Memory)
+        # 🟢 2. ระบบจำ (Memory) 🟢
         if final_input.startswith("สอนAI:"):
             parts = final_input.replace("สอนAI:", "").split("=")
             if len(parts) == 2:
@@ -56,14 +57,14 @@ def get_ai_response(api_key, sys_prompt, final_input, file_context="", image_dat
         if cached_answer:
             return f"⚡ [ตอบจากความจำ]: {cached_answer}"
 
-        # 2. จัดเตรียมบริบทจาก PDF (ถ้ามี)
+        # 🟢 3. จัดเตรียมบริบทจาก PDF (ถ้ามี) 🟢
         if file_context:
             sys_prompt += f"\n\n[ข้อมูลอ้างอิงจากไฟล์เอกสารที่อัปโหลด: ให้ตอบคำถามโดยอิงจากข้อมูลต่อไปนี้]\n{file_context}"
 
         llm = ChatGoogleGenerativeAI(model="gemini-3.6-flash", google_api_key=api_key)
         llm_with_tools = llm.bind_tools(tools)
         
-        # 3. สร้าง Payload ข้อความส่งให้ AI
+        # 🟢 4. สร้าง Payload ส่งให้ AI 🟢
         messages_payload = [("system", sys_prompt)]
         
         for i, msg in enumerate(st.session_state.chat_history):
