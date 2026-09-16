@@ -6,14 +6,24 @@ from streamlit_mic_recorder import speech_to_text
 
 from ui_config import setup_page, load_css
 from translations import i18n
-from auth import init_session_state, show_login_page, logout_user
+from auth import init_session_state as auth_init_session, show_login_page, logout_user
 from ai_engine import get_ai_response, read_pdf
 
-from db import init_db, load_chat_history, save_chat_history
+# 🟢 นำเข้าฟังก์ชันจาก db.py ระบบใหม่ 🟢
+from db import init_db, get_recent_chats, load_chat_history, save_chat_history, generate_chat_id
 
-# 1. สั่งตั้งค่า Session และ DB
 setup_page()
-init_session_state()
+
+# 🟢 ฟังก์ชันเตรียมตัวแปรสำหรับระบบแชทแบบหลายห้อง 🟢
+def init_chat_session():
+    auth_init_session()
+    # ถ้ายังไม่มี ID ห้องแชท ให้สร้างใหม่
+    if "current_chat_id" not in st.session_state:
+        st.session_state.current_chat_id = generate_chat_id()
+    if "chat_history" not in st.session_state:
+        st.session_state.chat_history = []
+
+init_chat_session()
 init_db()
 load_dotenv()
 
@@ -23,20 +33,32 @@ load_css(st.session_state.theme)
 file_context = ""
 image_data = None
 
-# --- 2. SIDEBAR (จัดเรียงลำดับให้เหมือนเดิม) ---
+# --- SIDEBAR (แถบเมนูด้านซ้าย) ---
 with st.sidebar:
     st.subheader("✨ AI Agent Pro")
     
-    # 🟢 โชว์ปุ่มแชทใหม่และกล่องอัปโหลด *เฉพาะตอนล็อกอินแล้ว* ไว้ด้านบน 🟢
     if st.session_state.logged_in:
-        if st.button(txt["new_chat"], use_container_width=True):
+        # 🟢 ปุ่มเริ่มแชทใหม่ (สร้างกล่องแชทใหม่) 🟢
+        if st.button("➕ " + txt.get("new_chat", "เริ่มแชทใหม่"), use_container_width=True):
+            st.session_state.current_chat_id = generate_chat_id()
             st.session_state.chat_history = []
-            save_chat_history(st.session_state.current_user, [])
             st.rerun()
             
-        if st.session_state.chat_history:
-            chat_export = "".join([f"{'User' if msg['role'] == 'user' else 'AI'}: {msg['content']}\n\n" for msg in st.session_state.chat_history])
-            st.download_button(label="💾 ดาวน์โหลดประวัติแชท", data=chat_export, file_name="chat_history.txt", mime="text/plain", use_container_width=True)
+        st.divider()
+        
+        # 🟢 เมนู Recents (ดึงประวัติการคุยย้อนหลัง) 🟢
+        st.caption("🕒 ประวัติการคุย (Recents)")
+        recent_chats = get_recent_chats(st.session_state.current_user)
+        
+        if not recent_chats:
+            st.markdown("<p style='font-size: 0.8rem; color: gray;'>ยังไม่มีประวัติการคุย</p>", unsafe_allow_html=True)
+        else:
+            for chat in recent_chats:
+                # 🟢 สร้างปุ่มสำหรับแต่ละแชท พอกดปุ๊บให้โหลดข้อมูลแชทนั้นๆ 🟢
+                if st.button(f"💬 {chat['title']}", key=chat['chat_id'], use_container_width=True):
+                    st.session_state.current_chat_id = chat['chat_id']
+                    st.session_state.chat_history = load_chat_history(chat['chat_id'])
+                    st.rerun()
         
         st.divider()
 
@@ -67,44 +89,39 @@ with st.sidebar:
         
         st.divider()
 
-    # 🟢 ส่วนการตั้งค่า โชว์เสมอ (ให้อยู่ตรงกลาง) 🟢
-    st.caption(txt["settings"])
-    selected_lang = st.selectbox(txt["lang_label"], ["ไทย", "English", "中文"], key="sb_lang", index=["ไทย", "English", "中文"].index(st.session_state.language))
+    st.caption(txt.get("settings", "การตั้งค่า"))
+    selected_lang = st.selectbox(txt.get("lang_label", "ภาษา"), ["ไทย", "English", "中文"], key="sb_lang", index=["ไทย", "English", "中文"].index(st.session_state.language))
     if selected_lang != st.session_state.language:
         st.session_state.language = selected_lang
         st.rerun()
         
-    selected_theme = st.radio(txt["theme_label"], ["Light", "Dark"], key="sb_theme", horizontal=True, index=0 if st.session_state.theme == "Light" else 1)
+    selected_theme = st.radio(txt.get("theme_label", "โหมดสี"), ["Light", "Dark"], key="sb_theme", horizontal=True, index=0 if st.session_state.theme == "Light" else 1)
     if selected_theme != st.session_state.theme:
         st.session_state.theme = selected_theme
         st.rerun()
 
-    # 🟢 โชว์ปุ่มออกจากระบบ ไว้ล่างสุด *เฉพาะตอนล็อกอินแล้ว* 🟢
     if st.session_state.logged_in:
         st.divider()
         st.caption(f"Account: **{st.session_state.current_user}**")
-        if st.button(txt["logout"], use_container_width=True):
+        if st.button(txt.get("logout", "ออกจากระบบ"), use_container_width=True):
             logout_user()
+            if "current_chat_id" in st.session_state:
+                del st.session_state["current_chat_id"]
             st.rerun()
 
-# --- 3. หยุดโค้ดตรงนี้ ถ้ายังไม่ล็อกอิน ---
+# --- เช็คล็อกอิน ---
 if not show_login_page(txt):
     st.stop()
-
-
-# --- 4. โค้ดห้องแชท (ทำงานเมื่อล็อกอินผ่านแล้ว) ---
-if "db_loaded" not in st.session_state or not st.session_state.db_loaded:
-    st.session_state.chat_history = load_chat_history(st.session_state.current_user)
-    st.session_state.db_loaded = True
 
 try:
     api_key = st.secrets["GOOGLE_API_KEY"]
 except Exception:
     api_key = os.getenv("GOOGLE_API_KEY")
 
+# --- ส่วนห้องแชทหลัก ---
 prompt_to_send = None
 if not st.session_state.chat_history:
-    st.markdown(f"<div class='greeting-title'>{txt['greeting']}</div>", unsafe_allow_html=True)
+    st.markdown(f"<div class='greeting-title'>{txt.get('greeting', 'ยินดีต้อนรับ')}</div>", unsafe_allow_html=True)
     st.markdown("<p style='text-align: center; color: gray; margin-bottom: 2rem;'>✨ เลือกคำถามด่วนด้านล่าง หรือพิมพ์คำถามของคุณเองได้เลย</p>", unsafe_allow_html=True)
     
     q_col1, q_col2, q_col3 = st.columns(3)
@@ -121,7 +138,7 @@ col_mic, col_space = st.columns([1, 4])
 with col_mic:
     voice_text = speech_to_text(language='th', start_prompt="🎙️ พูดสั่งงาน", stop_prompt="⏹️ หยุดฟัง", key='voice_input')
 
-user_input = st.chat_input(txt["input_placeholder"])
+user_input = st.chat_input(txt.get("input_placeholder", "พิมพ์ข้อความ..."))
 final_input = prompt_to_send or voice_text or user_input
 
 if final_input:
@@ -131,8 +148,17 @@ if final_input:
 
     with st.chat_message("assistant"):
         with st.spinner("Processing..."):
-            final_text = get_ai_response(api_key, txt["sys_prompt"], final_input, file_context, image_data)
+            final_text = get_ai_response(api_key, txt.get("sys_prompt", ""), final_input, file_context, image_data)
             st.markdown(final_text)
             st.session_state.chat_history.append({"role": "assistant", "content": final_text})
             
-            save_chat_history(st.session_state.current_user, st.session_state.chat_history)
+            # 🟢 ระบบดึงชื่อหัวข้อแชท: เอาประโยคแรกสุด 30 ตัวอักษร มาตั้งเป็นชื่อแชท 🟢
+            chat_title = st.session_state.chat_history[0]["content"]
+            if len(chat_title) > 30:
+                chat_title = chat_title[:30] + "..."
+            
+            # 🟢 เซฟลง Database พร้อม ID แชท และชื่อหัวข้อ 🟢
+            save_chat_history(st.session_state.current_chat_id, st.session_state.current_user, chat_title, st.session_state.chat_history)
+            
+            # 🟢 สั่ง Refresh เพื่อให้เมนู Recents ทางซ้ายอัปเดต 🟢
+            st.rerun()
