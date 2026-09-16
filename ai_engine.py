@@ -37,7 +37,7 @@ def read_pdf(uploaded_file):
     except Exception as e:
         return f"เกิดข้อผิดพลาดในการอ่าน PDF: {e}"
 
-# 🟢 เพิ่มตัวแปร image_data เพื่อรับรูปภาพ 🟢
+# 🟢 สังเกตตรงนี้ครับ เราเพิ่มตัวแปร image_data=None เข้ามารับรูปภาพแล้ว 🟢
 def get_ai_response(api_key, sys_prompt, final_input, file_context="", image_data=None):
     try:
         # 1. ระบบจำ (Memory)
