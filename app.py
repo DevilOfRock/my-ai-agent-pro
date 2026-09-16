@@ -117,7 +117,7 @@ for message in st.session_state.chat_history:
 user_input = st.chat_input(txt["input_placeholder"])
 final_input = prompt_to_send or user_input
 
-iif final_input:
+if final_input:
     st.session_state.chat_history.append({"role": "user", "content": final_input})
     with st.chat_message("user"): 
         st.markdown(final_input)
