@@ -102,7 +102,7 @@ def get_ai_response(api_key, sys_prompt, final_input, file_context="", image_dat
         import google.generativeai as genai
         genai.configure(api_key=api_key)
         # ใช้โมเดล gemini-1.5-flash-latest
-        model = genai.GenerativeModel('gemini-1.5-flash-latest') 
+        model = genai.GenerativeModel('gemini-pro') 
 
         if image_data:
             part = {"mime_type": "image/jpeg", "data": image_data}
