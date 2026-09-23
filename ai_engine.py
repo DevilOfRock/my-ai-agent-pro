@@ -7,6 +7,7 @@ from youtube_transcript_api import YouTubeTranscriptApi
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_community.tools import DuckDuckGoSearchRun
 from langchain_core.tools import tool
+from knowledge_db import add_to_knowledge_base, search_knowledge_base
 
 from memory import check_memory, teach_memory
 
@@ -72,63 +73,44 @@ def read_pdf(uploaded_file):
 
 def get_ai_response(api_key, sys_prompt, final_input, file_context="", image_data=None):
     try:
-        # เวลาของระบบ
+        # 🟢 1. ระบบเรียนรู้ด้วยตัวเอง (บันทึกลงสมองระยะยาว ChromaDB) 🟢
+        if final_input.startswith("จดจำ:"):
+            # ตัดคำว่า "จดจำ:" ออก แล้วเอาเนื้อหาที่เหลือไปเซฟ
+            knowledge_text = final_input.replace("จดจำ:", "").strip()
+            add_to_knowledge_base(knowledge_text, source_name="ผู้ใช้สอน")
+            return f"🧠 ผมได้เรียนรู้และจัดเก็บข้อมูลนี้ลงในสมองระยะยาวเรียบร้อยแล้วครับ!\n\n*(ข้อมูลที่บันทึก: {knowledge_text})*"
+
+        # 🟢 2. ดึงความรู้จากสมองระยะยาวที่สอดคล้องกับคำถาม (RAG) 🟢
+        retrieved_knowledge = search_knowledge_base(final_input)
+        rag_context = ""
+        if retrieved_knowledge:
+            # ถ้าเจอข้อมูลที่ความหมายเกี่ยวข้องกัน ให้เตรียมข้อความไว้ป้อนให้ Gemini
+            rag_context = f"\n\n[ข้อมูลเพิ่มเติมจากความทรงจำระยะยาวของคุณ]:\n{retrieved_knowledge}\n(จงใช้ข้อมูลนี้อ้างอิงในการตอบคำถามอย่างเป็นธรรมชาติ)"
+
+        # --- จัดการเวลาของระบบ ---
+        import datetime
         tz_th = datetime.timezone(datetime.timedelta(hours=7))
         current_time = datetime.datetime.now(tz_th).strftime("%Y-%m-%d %H:%M:%S")
         sys_prompt = f"[ข้อมูลระบบ: วันนี้คือวันที่และเวลา {current_time}]\n\n" + sys_prompt
 
-        # ระบบจำ (Memory)
-        if final_input.startswith("สอนAI:"):
-            parts = final_input.replace("สอนAI:", "").split("=")
-            if len(parts) == 2:
-                teach_memory(parts[0].strip(), parts[1].strip())
-                return f"🧠 จำไว้แล้วครับ! ถ้ามีคนถามว่า '{parts[0].strip()}' ผมจะตอบว่า '{parts[1].strip()}' ทันทีครับ"
-            else:
-                return "รูปแบบการสอนไม่ถูกต้องครับ ลอง: สอนAI: คำถาม = คำตอบ"
+        # --- รวมข้อมูลทั้งหมดเข้าด้วยกัน (คำถาม + ไฟล์อัปโหลด + ความจำระยะยาว) ---
+        combined_prompt = final_input
+        if file_context or rag_context:
+            combined_prompt = f"คำถาม/คำสั่งของผู้ใช้: {final_input}\n\n[ข้อมูลอ้างอิงจากไฟล์]:\n{file_context}{rag_context}"
 
-        cached_answer = check_memory(final_input)
-        if cached_answer:
-            return f"⚡ [ตอบจากความจำ]: {cached_answer}"
+        # --- ตั้งค่าและเรียกใช้ Gemini API ---
+        import google.generativeai as genai
+        genai.configure(api_key=api_key)
+        # ใช้โมเดล gemini-1.5-flash (หรือโมเดลเดิมที่คุณใช้อยู่)
+        model = genai.GenerativeModel('gemini-1.5-flash') 
 
-        # บริบทจากไฟล์
-        if file_context:
-            sys_prompt += f"\n\n[ข้อมูลอ้างอิงจากไฟล์เอกสารที่อัปโหลด: ให้ตอบคำถามโดยอิงจากข้อมูลต่อไปนี้]\n{file_context}"
-
-        llm = ChatGoogleGenerativeAI(model="gemini-3.6-flash", google_api_key=api_key)
-        llm_with_tools = llm.bind_tools(tools)
-        
-        messages_payload = [("system", sys_prompt)]
-        
-        for i, msg in enumerate(st.session_state.chat_history):
-            if i == len(st.session_state.chat_history) - 1 and image_data and msg["role"] == "user":
-                b64_img = base64.b64encode(image_data).decode('utf-8')
-                user_content = [
-                    {"type": "text", "text": msg["content"]},
-                    {"type": "image_url", "image_url": f"data:image/jpeg;base64,{b64_img}"}
-                ]
-                messages_payload.append(("user", user_content))
-            else:
-                messages_payload.append((msg["role"], msg["content"]))
-
-        response = llm_with_tools.invoke(messages_payload)
-        
-        # 🟢 ดักจับ Tool ใหม่ตอน AI เรียกใช้งาน 🟢
-        if response.tool_calls:
-            tc = response.tool_calls[0]
-            if tc["name"] == "duckduckgo_search":
-                query = tc["args"].get("query", final_input)
-                sr = search_tool.invoke(query)
-                summary = llm.invoke(f"จากข้อมูล: {sr} จงตอบ: {final_input} เป็นภาษา {st.session_state.language}")
-                return extract_text(summary.content)
-            elif tc["name"] == "calculate_vat":
-                return calculate_vat.invoke({"price": tc["args"].get("price", 0)})
-            elif tc["name"] == "summarize_youtube":
-                # ให้ดึงข้อมูลคลิปแล้วส่งให้ AI สรุปอีกที
-                clip_data = summarize_youtube.invoke({"url": tc["args"].get("url", "")})
-                summary = llm.invoke(f"จากเนื้อหาคลิปต่อไปนี้: {clip_data}\n\nคำสั่งจากผู้ใช้: {final_input}\nช่วยตอบเป็นภาษา {st.session_state.language} ให้อ่านง่ายๆ")
-                return extract_text(summary.content)
+        if image_data:
+            part = {"mime_type": "image/jpeg", "data": image_data}
+            response = model.generate_content([sys_prompt, part, combined_prompt])
         else:
-            return extract_text(response.content)
-            
+            response = model.generate_content([sys_prompt, combined_prompt])
+
+        return response.text
+
     except Exception as e:
-        return f"เกิดข้อผิดพลาด: {e}"
+        return f"เกิดข้อผิดพลาดในการประมวลผล AI: {e}"
