@@ -13,3 +13,4 @@ streamlit-mic-recorder
 extra-streamlit-components
 chromadb
 sentence-transformers
+google-generativeai
