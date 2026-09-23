@@ -11,3 +11,5 @@ pandas
 openpyxl
 streamlit-mic-recorder
 extra-streamlit-components
+chromadb
+sentence-transformers
