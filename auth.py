@@ -21,7 +21,7 @@ def init_session_state():
     if "chat_history" not in st.session_state:
         st.session_state.chat_history = []
         
-    # 🟢 เพิ่มการตั้งค่าภาษาและธีมเริ่มต้นกลับเข้ามา (ตรงนี้ที่หายไปครับ!) 🟢
+    # 🟢 เพิ่มการตั้งค่าภาษาและธีมเริ่มต้นกลับเข้ามา
     if "language" not in st.session_state:
         st.session_state.language = "ไทย"
     if "theme" not in st.session_state:
@@ -46,22 +46,24 @@ def show_login_page(txt):
     
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
-        username = st.text_input("Username")
-        password = st.text_input("Password", type="password")
-        
-        if st.button(txt.get('login_btn', 'เข้าสู่ระบบ'), use_container_width=True):
-            if username in USERS and USERS[username] == password:
-                st.session_state.logged_in = True
-                st.session_state.current_user = username
-                
-                # บันทึก Cookie ลงเครื่องผู้ใช้ ให้จำไว้ 7 วัน
-                expires_at = datetime.datetime.now() + datetime.timedelta(days=7)
-                cookie_manager.set("logged_in_user", username, expires_at=expires_at)
-                
-                st.success("เข้าสู่ระบบสำเร็จ!")
-                st.rerun()
-            else:
-                st.error("Username หรือ Password ไม่ถูกต้อง")
+        # 🟢 สร้าง Form เพื่อให้กด Enter ได้ (จัดให้อยู่ตรงกลาง) 🟢
+        with st.form("login_form"):
+            username = st.text_input("Username")
+            password = st.text_input("Password", type="password")
+            
+            # ปุ่ม submit สำหรับ form
+            submitted = st.form_submit_button("เข้าสู่ระบบ", use_container_width=True)
+            
+            if submitted:
+                # เช็ครหัสผ่านจากตาราง USERS ด้านบน
+                if username in USERS and USERS[username] == password: 
+                    st.session_state.logged_in = True
+                    st.session_state.current_user = username
+                    # เซฟคุกกี้ให้อยู่ในระบบ 30 วัน
+                    cookie_manager.set("logged_in_user", username, expires_at=datetime.datetime.now() + datetime.timedelta(days=30))
+                    st.rerun() # รีเฟรชหน้าเพื่อเข้าสู่แอป
+                else:
+                    st.error("Username หรือ Password ไม่ถูกต้อง")
                 
     return False
 
