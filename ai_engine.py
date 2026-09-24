@@ -101,7 +101,8 @@ def get_ai_response(api_key, sys_prompt, final_input, file_context="", image_dat
         # --- ตั้งค่าและเรียกใช้ Gemini API ---
         import google.generativeai as genai
         genai.configure(api_key=api_key)
-        # ใช้โมเดล gemini-1.5-flash-latest
+        
+        print("👉 รันโค้ดใหม่แล้วโว้ย!") # เติมบรรทัดนี้ลงไปเพื่อจับผิด
         model = genai.GenerativeModel('gemini-pro') 
 
         if image_data:
