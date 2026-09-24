@@ -8,8 +8,6 @@ from ui_config import setup_page, load_css
 from translations import i18n
 from auth import init_session_state as auth_init_session, show_login_page, logout_user
 from ai_engine import get_ai_response, read_pdf
-
-# 🟢 เพิ่ม delete_chat_history เข้ามา 🟢
 from db import init_db, get_recent_chats, load_chat_history, save_chat_history, generate_chat_id, delete_chat_history
 
 setup_page()
@@ -51,20 +49,16 @@ with st.sidebar:
             st.markdown("<p style='font-size: 0.8rem; color: gray;'>ยังไม่มีประวัติการคุย</p>", unsafe_allow_html=True)
         else:
             for chat in recent_chats:
-                # ปรับสัดส่วนให้ปุ่ม 3 จุดเล็กแคบนิดเดียว (85% : 15%)
                 col_title, col_menu = st.columns([5, 1])
                 
                 with col_title:
-                    # ปุ่มเปิดแชท
                     if st.button(f"💬 {chat['title']}", key=f"btn_{chat['chat_id']}", use_container_width=True):
                         st.session_state.current_chat_id = chat['chat_id']
                         st.session_state.chat_history = load_chat_history(chat['chat_id'])
                         st.rerun()
                 
                 with col_menu:
-                    # 🟢 ใช้ popover สร้างเมนูจุด 3 จุด 🟢
                     with st.popover("⋮", use_container_width=True):
-                        # ใส่ปุ่มลบซ่อนไว้ข้างใน
                         if st.button("🗑️ ลบแชท", key=f"del_{chat['chat_id']}", use_container_width=True):
                             delete_chat_history(chat['chat_id'])
                             if st.session_state.current_chat_id == chat['chat_id']:
@@ -74,33 +68,30 @@ with st.sidebar:
         
         st.divider()
 
-        st.caption("📂 คลังความรู้ (PDF, รูปภาพ, ตารางข้อมูล)")
-        uploaded_file = st.file_uploader("อัปโหลด (PDF, PNG, JPG, CSV, Excel)", type=["pdf", "png", "jpg", "jpeg", "csv", "xlsx"])
-        
-        if uploaded_file is not None:
-            file_ext = uploaded_file.name.split('.')[-1].lower()
-            with st.spinner("กำลังวิเคราะห์ไฟล์..."):
-                if file_ext == "pdf":
-                    file_context = read_pdf(uploaded_file)
-                    st.success("อ่านไฟล์ PDF สำเร็จ!")
-                elif file_ext in ["csv", "xlsx"]:
-                    try:
-                        if file_ext == "csv":
-                            df = pd.read_csv(uploaded_file)
-                        else:
-                            df = pd.read_excel(uploaded_file)
+        # 🟢 ระบบอัปโหลดและดูดไฟล์ลงสมอง RAG 🟢
+        uploaded_file = st.file_uploader("อัปโหลด (PDF, PNG, JPG, CSV, Excel)", type=['pdf', 'png', 'jpg', 'jpeg', 'csv', 'xlsx'])
+
+        if uploaded_file:
+            if uploaded_file.name.lower().endswith('.pdf'):
+                if st.button("🧠 ดูดไฟล์นี้ลงสมองระยะยาว (RAG)", use_container_width=True):
+                    with st.status("กำลังย่อยและบันทึกข้อมูลลงสมอง..."):
+                        # ดึงฟังก์ชันอ่าน PDF มาใช้
+                        pdf_text = read_pdf(uploaded_file)
                         
-                        file_context = f"ข้อมูลจากไฟล์ตาราง ({uploaded_file.name}):\n{df.to_string()}"
-                        st.success("อ่านข้อมูลตารางสำเร็จ!")
-                        st.dataframe(df.head(5))
-                    except Exception as e:
-                        st.error(f"เกิดข้อผิดพลาดในการอ่านไฟล์ตาราง: {e}")
-                else:
-                    image_data = uploaded_file.getvalue()
-                    st.image(uploaded_file, caption="อัปโหลดรูปภาพสำเร็จ!", use_container_width=True)
+                        # ทำ Chunking: หั่นข้อความยาวๆ เป็นท่อน ท่อนละ 1,000 ตัวอักษร
+                        chunk_size = 1000
+                        chunks = [pdf_text[i:i + chunk_size] for i in range(0, len(pdf_text), chunk_size)]
+                        
+                        from knowledge_db import add_to_knowledge_base
+                        for i, chunk in enumerate(chunks):
+                            # โยนแต่ละท่อนเข้าตู้ความจำ
+                            add_to_knowledge_base(chunk, source_name=f"ไฟล์ {uploaded_file.name} (ส่วนที่ {i+1})")
+                        
+                    st.success(f"บันทึกความรู้จาก {uploaded_file.name} ลงสมองสำเร็จ! (รวม {len(chunks)} ส่วน)")
         
         st.divider()
 
+    # 🟢 การตั้งค่า (จับกลับเข้ามาใน Sidebar) 🟢
     st.caption(txt.get("settings", "การตั้งค่า"))
     selected_lang = st.selectbox(txt.get("lang_label", "ภาษา"), ["ไทย", "English", "中文"], key="sb_lang", index=["ไทย", "English", "中文"].index(st.session_state.language))
     if selected_lang != st.session_state.language:
