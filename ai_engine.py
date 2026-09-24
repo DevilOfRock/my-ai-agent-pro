@@ -103,7 +103,7 @@ def get_ai_response(api_key, sys_prompt, final_input, file_context="", image_dat
         genai.configure(api_key=api_key)
         
         print("👉 รันโค้ดใหม่แล้วโว้ย!") # เติมบรรทัดนี้ลงไปเพื่อจับผิด
-        model = genai.GenerativeModel('gemini-1.5-flash') 
+        model = genai.GenerativeModel('gemini-3.5-flash')
 
         if image_data:
             part = {"mime_type": "image/jpeg", "data": image_data}
