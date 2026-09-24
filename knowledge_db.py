@@ -6,8 +6,8 @@ import uuid
 # โมเดลตัวนี้จะโหลดมาทำงานในเครื่องเราครั้งแรกครั้งเดียว ไม่ต้องต่อเน็ต ไม่เสียเงิน!
 embedder = SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2')
 
-# สร้าง/เชื่อมต่อฐานข้อมูล ChromaDB (ระบบจะสร้างโฟลเดอร์ chroma_data ขึ้นมาเก็บไฟล์อัตโนมัติ)
-client = chromadb.PersistentClient(path="./chroma_data")
+# 🟢 แก้ชื่อโฟลเดอร์เป็น ai_memory เพื่อบังคับให้ Cloud สร้างตู้ใหม่ที่เขียนข้อมูลได้ 🟢
+client = chromadb.PersistentClient(path="./ai_memory")
 
 def get_collection():
     """ฟังก์ชันช่วยดึงหรือสร้าง Collection ใหม่ทุกครั้ง ป้องกันปัญหาขยะตกค้างบน Cloud"""
