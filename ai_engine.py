@@ -4,12 +4,12 @@ import base64
 import datetime
 import urllib.parse as urlparse
 from youtube_transcript_api import YouTubeTranscriptApi
-from duckduckgo_search import DDGS # 🟢 ใช้ตัวนี้ค้นเน็ตแทน จะเสถียรกว่าครับ
+from duckduckgo_search import DDGS
 
 from knowledge_db import add_to_knowledge_base, search_knowledge_base
 from memory import check_memory, teach_memory
 
-# --- 🛠️ ประกาศเครื่องมือ (Tools) แบบ Native ให้ Gemini นำไปใช้ ---
+# --- 🛠️ ประกาศเครื่องมือ (Tools) ---
 
 def search_web(query: str) -> str:
     """ใช้ค้นหาข้อมูลที่เป็นปัจจุบัน ข่าวสาร ราคาหุ้น ทองคำ หรือสิ่งที่ไม่รู้จากอินเทอร์เน็ต"""
@@ -38,7 +38,6 @@ def summarize_youtube(url: str) -> str:
         if not video_id:
             return "ดึงเนื้อหาไม่ได้: ลิงก์ YouTube ไม่ถูกต้องครับ"
 
-        # พยายามดึงซับภาษาไทยก่อน ถ้าไม่มีเอาภาษาอังกฤษ
         transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
         try:
             transcript = transcript_list.find_transcript(['th', 'en'])
@@ -47,13 +46,20 @@ def summarize_youtube(url: str) -> str:
             
         fetched_data = transcript.fetch()
         full_text = " ".join([t['text'] for t in fetched_data])
-        
-        # ส่งข้อความกลับไปให้ AI สรุป (จำกัดคำไว้ป้องกันล้น)
         return f"[ข้อความในคลิป]: {full_text[:15000]}"
     except Exception as e:
         return f"ดึงเนื้อหาไม่ได้ (คลิปอาจไม่มี Subtitle ปิดไว้): {str(e)}"
 
-# --- ฟังก์ชันอ่านไฟล์ PDF เดิมของคุณ ---
+# 🟢 ฟังก์ชันวาดรูป 🟢
+def generate_image_url(prompt_text: str) -> str:
+    try:
+        encoded_prompt = urlparse.quote(prompt_text)
+        image_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1024&height=1024&nologo=true"
+        return f"🎨 นี่คือรูปภาพที่คุณสั่งครับ:\n\n![Generated Image]({image_url})"
+    except Exception as e:
+        return f"ไม่สามารถสร้างรูปภาพได้: {e}"
+
+# --- ฟังก์ชันอ่านไฟล์ PDF ---
 def read_pdf(uploaded_file):
     try:
         reader = PyPDF2.PdfReader(uploaded_file)
@@ -69,6 +75,18 @@ def read_pdf(uploaded_file):
 # --- 🧠 สมองหลักประมวลผล AI ---
 def get_ai_response(api_key, sys_prompt, final_input, file_context="", image_data=None):
     try:
+        # 🟢 0. ดักจับคำสั่งวาดรูปตรงๆ ป้องกัน AI มโนโม้ตอบ 🟢
+        image_keywords = ["วาดรูป", "สร้างรูป", "เจนรูป", "ขอรูป", "วาดภาพ", "ขอภาพ"]
+        if any(keyword in final_input for keyword in image_keywords):
+            # สั่งให้ Gemini ช่วยแปลง Prompt คำสั่งเป็นภาษาอังกฤษสั้นๆ ชัดๆ ก่อนส่งไปเจนรูป
+            genai.configure(api_key=api_key)
+            translator_model = genai.GenerativeModel('gemini-3.5-flash')
+            trans_res = translator_model.generate_content(
+                f"Translate this image prompt into a detailed English image generation prompt (return only the English text): {final_input}"
+            )
+            english_prompt = trans_res.text.strip()
+            return generate_image_url(english_prompt)
+
         # 🟢 1. ระบบเรียนรู้ด้วยตัวเอง (บันทึกลงสมองระยะยาว ChromaDB) 🟢
         if final_input.startswith("จดจำ:"):
             knowledge_text = final_input.replace("จดจำ:", "").strip()
@@ -86,27 +104,22 @@ def get_ai_response(api_key, sys_prompt, final_input, file_context="", image_dat
         current_time = datetime.datetime.now(tz_th).strftime("%Y-%m-%d %H:%M:%S")
         sys_prompt = f"[ข้อมูลระบบ: วันนี้คือวันที่และเวลา {current_time}]\n\n" + sys_prompt
 
-        # --- รวมข้อมูลทั้งหมดเข้าด้วยกัน (คำถาม + ไฟล์อัปโหลด + ความจำระยะยาว) ---
+        # --- รวมข้อมูลทั้งหมดเข้าด้วยกัน ---
         combined_prompt = final_input
         if file_context or rag_context:
             combined_prompt = f"คำถาม/คำสั่งของผู้ใช้: {final_input}\n\n[ข้อมูลอ้างอิงจากไฟล์]:\n{file_context}{rag_context}"
         
-        # แพ็ครวม System Prompt เข้าไปกับคำถาม
         full_message = f"{sys_prompt}\n\n{combined_prompt}"
 
         # --- ตั้งค่าและเรียกใช้ Gemini API ---
         genai.configure(api_key=api_key)
         
-        # 🔥 เปิดการใช้งาน Tools และยื่นให้ Model นำไปใช้ตัดสินใจเอง 🔥
         model = genai.GenerativeModel(
             model_name='gemini-3.5-flash',
             tools=[search_web, calculate_vat, summarize_youtube]
         )
         
-        # ใช้ start_chat เพื่อให้ AI ประมวลผลแบบเบ็ดเสร็จ (เรียก Tool อัตโนมัติถ้าจำเป็น)
         chat = model.start_chat(enable_automatic_function_calling=True)
-        
-        print("👉 รันโค้ดใหม่ (ติดอาวุธ Function Calling 100%) แล้วโว้ย!")
 
         if image_data:
             part = {"mime_type": "image/jpeg", "data": image_data}

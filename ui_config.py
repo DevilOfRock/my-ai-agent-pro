@@ -30,6 +30,12 @@ def load_css(theme):
 
     st.markdown(f"""
         <style>
+        /* 🌟 แอนิเมชันเฟดอินสำหรับข้อความ (เพิ่มเข้ามาใหม่) */
+        @keyframes fadeIn {{
+            from {{ opacity: 0; transform: translateY(15px); }}
+            to {{ opacity: 1; transform: translateY(0); }}
+        }}
+
         /* 1. สีพื้นหลังหลักของแอป */
         .stApp {{ background: {app_bg} !important; }}
         
@@ -44,12 +50,19 @@ def load_css(theme):
         p, span, label, h1, h2, h3, h4, h5, h6, li, ul, ol, a, strong, b, i, em {{ color: {text_color} !important; }}
         section[data-testid="stSidebar"] {{ background-color: {sidebar_bg} !important; border-right: 1px solid {border_color} !important; }}
         
-        /* 5. สไตล์ปุ่มกดต่างๆ */
+        /* 5. สไตล์ปุ่มกดต่างๆ พร้อมเอฟเฟกต์ Hover */
         [data-testid="stFormSubmitButton"] > button, .stButton > button, [data-testid="stDownloadButton"] > button {{ 
             background-color: #1A73E8 !important; color: #FFFFFF !important; border-radius: 8px !important; border: none !important; 
+            transition: all 0.2s ease-in-out !important; /* 🌟 เพิ่ม Transition เข้ามา */
         }}
         [data-testid="stFormSubmitButton"] p, .stButton p, [data-testid="stDownloadButton"] p {{ color: #FFFFFF !important; }}
         
+        /* 🌟 เอฟเฟกต์ตอนชี้เมาส์ที่ปุ่ม (เพิ่มเข้ามาใหม่) */
+        [data-testid="stFormSubmitButton"] > button:hover, .stButton > button:hover, [data-testid="stDownloadButton"] > button:hover {{
+            transform: scale(1.02);
+            box-shadow: 0 4px 12px rgba(26, 115, 232, 0.4) !important;
+        }}
+
         /* 6. สไตล์กล่องข้อความและ Input */
         div[data-baseweb="select"] > div, div[data-baseweb="input"] > div, .stTextInput div[data-baseweb="input"] {{ background-color: {input_bg} !important; border: 1px solid {border_color} !important; }}
         div[data-baseweb="select"] span, div[data-baseweb="input"] input, div[data-testid="stChatInput"] textarea {{ color: {input_text} !important; -webkit-text-fill-color: {input_text} !important; }}
@@ -60,10 +73,19 @@ def load_css(theme):
         /* 7. ข้อความต้อนรับและกล่องแชท */
         .greeting-title {{ font-size: 2.8rem; font-weight: 400; color: {text_color}; text-align: center; margin-top: 6rem; margin-bottom: 2rem; font-family: 'Google Sans', sans-serif, Segoe UI; }}
         
-        div[data-testid="stChatMessage"]:has([data-testid*="user"]), div[data-testid="stChatMessage"]:has([data-testid*="User"]) {{ flex-direction: row-reverse !important; background-color: {user_bg} !important; margin-left: auto !important; margin-right: 0 !important; border-radius: 20px 20px 4px 20px !important; padding: 1rem 1.5rem !important; max-width: 80% !important; border: none !important; }}
+        /* 🌟 ฝั่งผู้ใช้ (User) - เพิ่ม Animation */
+        div[data-testid="stChatMessage"]:has([data-testid*="user"]), div[data-testid="stChatMessage"]:has([data-testid*="User"]) {{ 
+            animation: fadeIn 0.4s ease-out; /* 🌟 แอนิเมชันเด้งขึ้น */
+            flex-direction: row-reverse !important; background-color: {user_bg} !important; margin-left: auto !important; margin-right: 0 !important; border-radius: 20px 20px 4px 20px !important; padding: 1rem 1.5rem !important; max-width: 80% !important; border: none !important; 
+        }}
         div[data-testid="stChatMessage"]:has([data-testid*="user"]) [data-testid="stMarkdownContainer"] *, div[data-testid="stChatMessage"]:has([data-testid*="User"]) [data-testid="stMarkdownContainer"] * {{ color: {user_text} !important; }}
         
-        div[data-testid="stChatMessage"]:has([data-testid*="assistant"]), div[data-testid="stChatMessage"]:has([data-testid*="Assistant"]) {{ flex-direction: row !important; background-color: {ai_bg} !important; margin-right: auto !important; margin-left: 0 !important; border-radius: 20px 20px 20px 4px !important; padding: 1rem 1.5rem !important; max-width: 80% !important; border: 1px solid {border_color} !important; }}
+        /* 🌟 ฝั่ง AI (Assistant) - เพิ่ม Animation และมิติเงา */
+        div[data-testid="stChatMessage"]:has([data-testid*="assistant"]), div[data-testid="stChatMessage"]:has([data-testid*="Assistant"]) {{ 
+            animation: fadeIn 0.4s ease-out; /* 🌟 แอนิเมชันเด้งขึ้น */
+            flex-direction: row !important; background-color: {ai_bg} !important; margin-right: auto !important; margin-left: 0 !important; border-radius: 20px 20px 20px 4px !important; padding: 1rem 1.5rem !important; max-width: 80% !important; border: 1px solid {border_color} !important; 
+            box-shadow: 0 4px 10px rgba(0,0,0,0.05) !important; /* 🌟 เพิ่มมิติเงาบางๆ */
+        }}
         div[data-testid="stChatMessage"]:has([data-testid*="assistant"]) [data-testid="stMarkdownContainer"] *, div[data-testid="stChatMessage"]:has([data-testid*="Assistant"]) [data-testid="stMarkdownContainer"] * {{ color: {ai_text} !important; }}
         
         /* 8. กล่องอัปโหลดไฟล์ (File Uploader) */

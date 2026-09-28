@@ -1,8 +1,10 @@
 import os
+import io
 import streamlit as st
 import pandas as pd
 from dotenv import load_dotenv
 from streamlit_mic_recorder import speech_to_text
+from gtts import gTTS # 🟢 ระบบเสียง Google TTS
 
 from ui_config import setup_page, load_css
 from translations import i18n
@@ -39,6 +41,22 @@ with st.sidebar:
             st.session_state.chat_history = []
             st.rerun()
             
+        # 🟢 เพิ่มระบบดาวน์โหลดประวัติแชทตรงนี้ 🟢
+        if st.session_state.chat_history:
+            # จัดฟอร์แมตข้อความให้สวยงามก่อนเซฟลงไฟล์
+            chat_text = "บันทึกการสนทนา - AI Agent Pro\n" + ("="*40) + "\n\n"
+            for msg in st.session_state.chat_history:
+                role = "👤 คุณ" if msg["role"] == "user" else "🤖 AI Agent"
+                chat_text += f"{role}:\n{msg['content']}\n\n{'-'*40}\n\n"
+            
+            st.download_button(
+                label="📥 ดาวน์โหลดแชทนี้ (TXT)",
+                data=chat_text,
+                file_name=f"Chat_{st.session_state.current_chat_id[:8]}.txt",
+                mime="text/plain",
+                use_container_width=True
+            )
+            
         st.divider()
         
         # 🟢 เมนู Recents 🟢
@@ -68,26 +86,48 @@ with st.sidebar:
         
         st.divider()
 
-        # 🟢 ระบบอัปโหลดและดูดไฟล์ลงสมอง RAG 🟢
+        # 🟢 ระบบอัปโหลดและวิเคราะห์ข้อมูลแบบ All-in-One 🟢
         uploaded_file = st.file_uploader("อัปโหลด (PDF, PNG, JPG, CSV, Excel)", type=['pdf', 'png', 'jpg', 'jpeg', 'csv', 'xlsx'])
 
         if uploaded_file:
-            if uploaded_file.name.lower().endswith('.pdf'):
-                if st.button("🧠 ดูดไฟล์นี้ลงสมองระยะยาว (RAG)", use_container_width=True):
-                    with st.status("กำลังย่อยและบันทึกข้อมูลลงสมอง..."):
-                        # ดึงฟังก์ชันอ่าน PDF มาใช้
+            file_ext = uploaded_file.name.split('.')[-1].lower()
+            
+            # --- 1. จัดการ PDF (ยัดลงสมอง RAG) ---
+            if file_ext == 'pdf':
+                if st.button("🧠 ดูดไฟล์ PDF ลงสมองระยะยาว", use_container_width=True):
+                    with st.status("กำลังย่อยและบันทึกข้อมูล..."):
                         pdf_text = read_pdf(uploaded_file)
-                        
-                        # ทำ Chunking: หั่นข้อความยาวๆ เป็นท่อน ท่อนละ 1,000 ตัวอักษร
                         chunk_size = 1000
                         chunks = [pdf_text[i:i + chunk_size] for i in range(0, len(pdf_text), chunk_size)]
                         
                         from knowledge_db import add_to_knowledge_base
                         for i, chunk in enumerate(chunks):
-                            # โยนแต่ละท่อนเข้าตู้ความจำ
                             add_to_knowledge_base(chunk, source_name=f"ไฟล์ {uploaded_file.name} (ส่วนที่ {i+1})")
                         
-                    st.success(f"บันทึกความรู้จาก {uploaded_file.name} ลงสมองสำเร็จ! (รวม {len(chunks)} ส่วน)")
+                    st.success(f"บันทึกความรู้จาก {uploaded_file.name} ลงสมองสำเร็จ!")
+
+            # --- 2. จัดการรูปภาพ (AI Vision) ---
+            elif file_ext in ['png', 'jpg', 'jpeg']:
+                st.image(uploaded_file, caption=uploaded_file.name, use_container_width=True)
+                image_data = uploaded_file.getvalue()
+                st.info("👀 AI มองเห็นรูปนี้แล้ว พิมพ์คำถามในแชทได้เลย! (เช่น รูปนี้คืออะไร, ช่วยแปลป้ายนี้ให้หน่อย)")
+
+            # --- 3. จัดการไฟล์ตาราง (Data Analyst) ---
+            elif file_ext in ['csv', 'xlsx']:
+                try:
+                    if file_ext == 'csv':
+                        df = pd.read_csv(uploaded_file)
+                    else:
+                        df = pd.read_excel(uploaded_file)
+                    
+                    st.caption("พรีวิวข้อมูล (5 แถวแรก):")
+                    st.dataframe(df.head(5), use_container_width=True)
+                    
+                    # แปลงตารางเป็น Markdown ยัดใส่ context ให้ AI อ่าน
+                    file_context = f"[ข้อมูลจากไฟล์ {uploaded_file.name}]:\n{df.to_markdown()}"
+                    st.info("📊 AI อ่านข้อมูลตารางแล้ว สั่งวิเคราะห์ สรุปยอด หรือหากำไรได้เลย!")
+                except Exception as e:
+                    st.error(f"อ่านไฟล์ไม่ได้: {e}")
         
         st.divider()
 
@@ -132,9 +172,29 @@ if not st.session_state.chat_history:
     if q_col2.button("⛅ เช็คสภาพอากาศ", use_container_width=True): prompt_to_send = "สภาพอากาศในกรุงเทพวันนี้เป็นอย่างไรบ้าง?"
     if q_col3.button("📧 ช่วยร่างอีเมล", use_container_width=True): prompt_to_send = "ช่วยร่างอีเมลขอนัดประชุมงานกับลูกค้าอย่างสุภาพให้หน่อย"
 
-for message in st.session_state.chat_history:
+# 🟢 ฟังก์ชันสำหรับสร้างไฟล์เสียง MP3 🟢
+def generate_speech(text):
+    try:
+        tts = gTTS(text=text, lang='th')
+        fp = io.BytesIO()
+        tts.write_to_fp(fp)
+        fp.seek(0)
+        return fp
+    except Exception as e:
+        return None
+
+# 🟢 แสดงประวัติการคุยทั้งหมด พร้อมเครื่องเล่นเสียงสำหรับฝั่ง AI 🟢
+for idx, message in enumerate(st.session_state.chat_history):
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
+        if message["role"] == "assistant":
+            # ปุ่มเล่นเสียงย้อนหลังสำหรับแต่ละคำตอบ
+            with st.popover("🔊 ฟังเสียง"):
+                audio_file = generate_speech(message["content"])
+                if audio_file:
+                    st.audio(audio_file, format="audio/mp3")
+                else:
+                    st.caption("ไม่สามารถสร้างไฟล์เสียงได้")
 
 voice_text = None
 col_mic, col_space = st.columns([1, 4])
@@ -153,6 +213,12 @@ if final_input:
         with st.spinner("Processing..."):
             final_text = get_ai_response(api_key, txt.get("sys_prompt", ""), final_input, file_context, image_data)
             st.markdown(final_text)
+            
+            # 🟢 สร้างและเล่นเสียงคำตอบล่าสุดทันที (Autoplay) 🟢
+            audio_file = generate_speech(final_text)
+            if audio_file:
+                st.audio(audio_file, format="audio/mp3", autoplay=True)
+
             st.session_state.chat_history.append({"role": "assistant", "content": final_text})
             
             chat_title = st.session_state.chat_history[0]["content"]
